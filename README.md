@@ -1,5 +1,7 @@
 # Ember
 
+[![CI](https://github.com/shaheen-bhattacharya/Ember/actions/workflows/ci.yml/badge.svg)](https://github.com/shaheen-bhattacharya/Ember/actions/workflows/ci.yml)
+
 A small dynamically-typed language and its runtime, built from scratch in C++17 — the first tier of a planned multi-tier JIT-compiled virtual machine (the same architecture as V8, JavaScriptCore, and the JVM).
 
 **Current status: Tier 0 complete.** Source is lexed, parsed (single-pass Pratt parser, no AST), compiled to a compact stack-based bytecode, and executed by a bytecode interpreter with a precise mark-sweep garbage collector and interned strings.
@@ -17,7 +19,7 @@ print "fib(30) = " + str(fib(30));
 print "took " + str(clock() - start) + "s";
 ```
 
-Dynamic typing over four value kinds (`nil`, booleans, 64-bit float numbers, heap objects), first-class functions and closures (with shared mutable captures, Lua-style upvalues), lexically-scoped locals, `if`/`else`, `while`, `for`, short-circuiting `and`/`or`, strings with `+` concatenation, and native functions (`clock`, `str`).
+Dynamic typing over four value kinds (`nil`, booleans, 64-bit float numbers, heap objects), first-class functions and closures (with shared mutable captures, Lua-style upvalues), lexically-scoped locals, `if`/`else`, `while`, `for`, short-circuiting `and`/`or`, strings with `+` concatenation, and native functions (`clock`, `str`, `sqrt`, `abs`). Runnable programs live in [examples/](examples/).
 
 ## Build and run
 
