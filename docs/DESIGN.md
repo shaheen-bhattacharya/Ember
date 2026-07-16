@@ -69,8 +69,32 @@ function, so the runtime never searches scopes.
   a frame pointer analog), so the JIT calling convention can mirror `slots`.
 - The interpreter loop is the deopt target: any JIT bailout re-enters `run()`
   with a reconstructed `CallFrame`.
-- Missing and needed: per-opcode type feedback recording, and a function
-  hotness counter to drive tier-up. Both land in the interpreter first.
+- Type feedback and hotness counters (below) are recorded; what remains is the
+  tier-up trigger itself — swapping a hot function's entry point to JIT code.
+
+## Profiling (the interpreter as tier-0 profiler)
+
+The interpreter records, always-on, the three signals the JIT tiers consume:
+
+- **Hotness**: per-function call and loop-back-edge counters. Crossing a
+  threshold (1,000 calls or 10,000 back-edges) marks the function `hot` —
+  the future tier-up trigger. `EMBER_LOG_HOT=1` logs the moment it happens.
+- **Operand type feedback**: every arithmetic/comparison/negate site ORs a
+  bitmask of its observed operand types into a per-function side table indexed
+  by bytecode offset (one byte per code byte, no bytecode format changes). A
+  site with one bit set is monomorphic — e.g. `OP_ADD number (monomorphic)` —
+  and is exactly the site the optimizing tier can specialize to an unboxed
+  float add guarded by a type check.
+- **Call-site caches**: each `OP_CALL` site remembers its first callee's
+  *code* identity (the `ObjFunction`, not the closure instance, since a
+  factory can produce a fresh closure per call over the same code). A second
+  distinct callee degrades the site to polymorphic. Monomorphic sites are
+  inlining candidates.
+
+`EMBER_PROFILE=1` dumps the whole profile at VM teardown, per function, sorted
+by call count. Recording costs roughly 20–40% on the benchmarks (fib
+0.10s→0.13s, tight loop 0.38s→0.53s) — the standard price of a profiling
+interpreter tier, paid only until hot code tiers up.
 
 ## Known limitations (deliberate, roadmap items)
 

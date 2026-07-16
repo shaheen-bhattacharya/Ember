@@ -205,6 +205,8 @@ class Compiler {
   ObjFunction* endCompiler() {
     emitReturn();
     ObjFunction* function = current_fc_->function;
+    // One feedback cell per code byte; only opcode offsets are ever written.
+    function->feedback.assign(function->chunk.code.size(), 0);
     current_fc_ = current_fc_->enclosing;
     return function;
   }

@@ -32,6 +32,8 @@ make debug      # ASan + -O0 build for hacking on the VM
 ./ember --dump script.em  # disassemble the compiled bytecode, don't run
 EMBER_TRACE=1 ./ember script.em   # trace every instruction + stack
 EMBER_LOG_GC=1 ./ember script.em  # log GC cycles
+EMBER_PROFILE=1 ./ember script.em # dump hotness + type feedback at exit
+EMBER_LOG_HOT=1 ./ember script.em # log when a function crosses the hot threshold
 ```
 
 ## Architecture
@@ -51,6 +53,7 @@ source ──lexer──> tokens ──compiler (Pratt)──> bytecode chunks �
 | VM | `src/vm.cpp` | Stack machine, call frames as stack windows |
 | GC | `src/memory.cpp` | Mark-sweep; roots = VM stack, frames, globals; weak intern table |
 | Disassembler | `src/debug.cpp` | Powers `--dump` and `EMBER_TRACE` |
+| Profiler | `src/profile.cpp` | Hotness, type feedback, call-site caches; powers `EMBER_PROFILE` |
 
 Design details and the rationale for each decision are in [docs/DESIGN.md](docs/DESIGN.md).
 
@@ -60,8 +63,8 @@ The point of this project is the full tiered-execution architecture:
 
 - [x] **Tier 0 — bytecode interpreter** (this repo today)
 - [x] Closures with upvalues (shared mutable capture, closed on scope exit)
+- [x] Type feedback: hotness counters, per-site operand type recording, monomorphic call-site caches (`EMBER_PROFILE=1`)
 - [ ] Classes if the fancy strikes
-- [ ] Type feedback: inline caches recording observed operand types at call/binary-op sites
 - [ ] **Tier 1 — baseline JIT**: template-compile bytecode to AArch64, `mmap(MAP_JIT)` code pages, interpreter↔JIT calling convention
 - [ ] **Tier 2 — optimizing JIT**: SSA IR, type specialization from recorded feedback, inlining, DCE, linear-scan register allocation
 - [ ] **Deoptimization**: bail from speculative JIT code back to the interpreter, reconstructing frames

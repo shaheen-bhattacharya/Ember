@@ -11,11 +11,42 @@ struct ObjString : Obj {
   explicit ObjString(std::string s) : chars(std::move(s)) { type = ObjType::STRING; }
 };
 
+// Observed-type bitmask recorded per bytecode site. A site whose mask has one
+// bit set is monomorphic — the signal the optimizing tier specializes on.
+enum TypeFeedbackBits : uint8_t {
+  FB_NIL = 1,
+  FB_BOOL = 2,
+  FB_NUMBER = 4,
+  FB_STRING = 8,
+  FB_CALLABLE = 16,
+  FB_OTHER = 32,
+};
+
+// Monomorphic call-site cache: remembers the one callee seen at this OP_CALL,
+// or degrades to polymorphic if a second one shows up.
+struct CallSiteFeedback {
+  int offset = 0;
+  Obj* target = nullptr;  // ObjFunction* or ObjNative*; nullptr once polymorphic
+  uint32_t count = 0;
+  bool polymorphic = false;
+};
+
+constexpr uint32_t kHotCallThreshold = 1000;
+constexpr uint32_t kHotBackEdgeThreshold = 10000;
+
 struct ObjFunction : Obj {
   int arity = 0;
   int upvalueCount = 0;
   Chunk chunk;
   ObjString* name = nullptr;  // nullptr for the top-level script
+
+  // Profiling, recorded by the interpreter and consumed by the JIT tiers.
+  uint32_t callCount = 0;
+  uint32_t backEdges = 0;
+  bool hot = false;
+  std::vector<uint8_t> feedback;  // type mask per bytecode offset (op sites only)
+  std::vector<CallSiteFeedback> callSites;
+
   ObjFunction() { type = ObjType::FUNCTION; }
 };
 

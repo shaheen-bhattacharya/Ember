@@ -9,6 +9,7 @@
 #include "compiler.h"
 #include "debug.h"
 #include "memory.h"
+#include "profile.h"
 
 // ---- native functions ----
 
@@ -25,18 +26,73 @@ static Value strNative(int argCount, Value* args) {
   return Value::object(copyString(valueToString(args[0])));
 }
 
+// ---- profiling helpers ----
+
+static inline uint8_t typeBit(const Value& v) {
+  switch (v.type) {
+    case ValueType::NIL: return FB_NIL;
+    case ValueType::BOOL: return FB_BOOL;
+    case ValueType::NUMBER: return FB_NUMBER;
+    case ValueType::OBJ:
+      switch (v.as.obj->type) {
+        case ObjType::STRING: return FB_STRING;
+        case ObjType::FUNCTION:
+        case ObjType::NATIVE:
+        case ObjType::CLOSURE: return FB_CALLABLE;
+        default: return FB_OTHER;
+      }
+  }
+  return FB_OTHER;
+}
+
+static void maybeMarkHot(ObjFunction* fn, bool logHot) {
+  if (fn->hot) return;
+  if (fn->callCount < kHotCallThreshold && fn->backEdges < kHotBackEdgeThreshold) {
+    return;
+  }
+  fn->hot = true;
+  if (logHot) {
+    fprintf(stderr, "[hot] %s is hot (%u calls, %u back-edges)\n",
+            fn->name ? fn->name->chars.c_str() : "<script>", fn->callCount,
+            fn->backEdges);
+  }
+}
+
+static void recordCallSite(ObjFunction* caller, int offset,
+                           const Value& callee) {
+  if (!callee.isObj()) return;
+  // Cache the code identity, not the closure instance: every call to
+  // makeCounter() yields a fresh closure, but the JIT cares about the target.
+  Obj* target = callee.as.obj->type == ObjType::CLOSURE
+                    ? static_cast<Obj*>(asClosure(callee)->function)
+                    : callee.as.obj;
+  for (CallSiteFeedback& site : caller->callSites) {
+    if (site.offset == offset) {
+      site.count++;
+      if (!site.polymorphic && site.target != target) {
+        site.polymorphic = true;
+        site.target = nullptr;
+      }
+      return;
+    }
+  }
+  caller->callSites.push_back({offset, target, 1, false});
+}
+
 // ---- VM ----
 
 VM::VM() {
   resetStack();
   gHeap.vm = this;
   traceExecution_ = getenv("EMBER_TRACE") != nullptr;
+  logHot_ = getenv("EMBER_LOG_HOT") != nullptr;
   gHeap.logGC = getenv("EMBER_LOG_GC") != nullptr;
   defineNative("clock", clockNative);
   defineNative("str", strNative);
 }
 
 VM::~VM() {
+  if (getenv("EMBER_PROFILE") != nullptr) printProfile();
   gHeap.vm = nullptr;
   gHeap.gcEnabled = false;
   gHeap.freeObjects();
@@ -110,6 +166,8 @@ bool VM::call(ObjClosure* closure, int argCount) {
     runtimeError("Stack overflow.");
     return false;
   }
+  function->callCount++;
+  maybeMarkHot(function, logHot_);
   CallFrame* frame = &frames_[frameCount_++];
   frame->closure = closure;
   frame->ip = function->chunk.code.data();
@@ -202,8 +260,19 @@ InterpretResult VM::run() {
 #define READ_CONSTANT() \
   (frame->closure->function->chunk.constants[READ_BYTE()])
 #define READ_STRING() (static_cast<ObjString*>(READ_CONSTANT().as.obj))
+// Records the observed operand types at the current opcode's offset. Valid
+// only in cases whose operands are still on the stack and whose bytecode
+// operands are unread (ip is one past the opcode byte).
+#define RECORD_TYPES(mask)                                         \
+  do {                                                             \
+    ObjFunction* fbFn = frame->closure->function;                  \
+    fbFn->feedback[frame->ip - fbFn->chunk.code.data() - 1] |=     \
+        (mask);                                                    \
+  } while (false)
+
 #define BINARY_OP(op)                                     \
   do {                                                    \
+    RECORD_TYPES(typeBit(peek(0)) | typeBit(peek(1)));    \
     if (!peek(0).isNumber() || !peek(1).isNumber()) {     \
       runtimeError("Operands must be numbers.");          \
       return InterpretResult::RUNTIME_ERROR;              \
@@ -290,6 +359,7 @@ InterpretResult VM::run() {
         break;
       }
       case OP_EQUAL: {
+        RECORD_TYPES(typeBit(peek(0)) | typeBit(peek(1)));
         Value b = pop();
         Value a = pop();
         push(Value::boolean(valuesEqual(a, b)));
@@ -302,6 +372,7 @@ InterpretResult VM::run() {
         BINARY_OP(Value::boolean(a < b));
         break;
       case OP_ADD: {
+        RECORD_TYPES(typeBit(peek(0)) | typeBit(peek(1)));
         if (peek(0).isString() && peek(1).isString()) {
           concatenate();
         } else if (peek(0).isNumber() && peek(1).isNumber()) {
@@ -330,6 +401,7 @@ InterpretResult VM::run() {
         push(Value::boolean(isFalsey(pop())));
         break;
       case OP_NEGATE:
+        RECORD_TYPES(typeBit(peek(0)));
         if (!peek(0).isNumber()) {
           runtimeError("Operand must be a number.");
           return InterpretResult::RUNTIME_ERROR;
@@ -352,10 +424,18 @@ InterpretResult VM::run() {
       case OP_LOOP: {
         uint16_t offset = READ_SHORT();
         frame->ip -= offset;
+        ObjFunction* fn = frame->closure->function;
+        fn->backEdges++;
+        maybeMarkHot(fn, logHot_);
         break;
       }
       case OP_CALL: {
         int argCount = READ_BYTE();
+        ObjFunction* caller = frame->closure->function;
+        recordCallSite(
+            caller,
+            static_cast<int>(frame->ip - caller->chunk.code.data()) - 2,
+            peek(argCount));
         if (!callValue(peek(argCount), argCount)) {
           return InterpretResult::RUNTIME_ERROR;
         }
@@ -403,5 +483,6 @@ InterpretResult VM::run() {
 #undef READ_SHORT
 #undef READ_CONSTANT
 #undef READ_STRING
+#undef RECORD_TYPES
 #undef BINARY_OP
 }

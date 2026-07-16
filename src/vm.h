@@ -37,6 +37,7 @@ class VM {
   std::unordered_map<ObjString*, Value> globals_;
   ObjUpvalue* openUpvalues_ = nullptr;  // sorted by stack slot, outermost first
   bool traceExecution_ = false;
+  bool logHot_ = false;
 
   InterpretResult run();
   void resetStack();
