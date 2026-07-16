@@ -1,0 +1,69 @@
+# Ember design notes
+
+## Tier 0 decisions and their rationale
+
+**Stack-based bytecode.** Tier 0 optimizes for simplicity and debuggability: a
+stack machine needs no register allocation in the compiler, and the
+disassembly maps 1:1 to source structure. The cost is more dispatch per useful
+operation than a register machine (Lua-style). That cost is deliberate — it
+makes the tier-1 baseline JIT speedup measurable and honest.
+
+**Single-pass compiler, no AST.** The Pratt parser emits bytecode as it
+parses. This is the fastest possible compile pipeline (one token of
+lookahead, no tree allocation) and is exactly what a baseline JIT tier wants:
+compile latency is part of a JIT's cost model. The optimizing tier will build
+its own SSA IR *from bytecode*, not from source — same as V8's Maglev/Turbofan
+and the JVM's C2.
+
+**Call frames are stack windows.** A `CallFrame` is `{function, ip, slots}`
+where `slots` points into the single contiguous value stack. Locals are just
+`slots[i]` — no separate environment objects, no hashing on the hot path.
+Frame setup is ~4 stores, which is why `fib` (call-heavy) is a fair benchmark.
+
+**Tagged-union values (16 bytes).** `{type tag, union{bool, double, Obj*}}`.
+NaN-boxing (packing everything into 8 bytes inside a canonical NaN) roughly
+halves stack traffic and is planned, but the tagged union keeps every value
+readable in a debugger while the VM's semantics are still settling.
+
+**Mark-sweep GC, collection only at allocation points.** All heap objects
+live on one intrusive linked list. Roots are the value stack, call-frame
+functions, and the globals table; reachability flows through function constant
+pools (a function keeps its nested functions and string constants alive). The
+collector runs when allocated bytes cross a threshold that doubles after each
+collection. Two correctness subtleties worth knowing:
+
+1. Collection happens *before* the triggering allocation, never after —
+   otherwise the brand-new object could be swept before its caller roots it.
+2. GC is disabled during compilation. Compile-time objects (functions, string
+   constants) are only reachable *after* compilation finishes, via the script
+   function; collecting mid-compile would sweep them.
+
+**Interned strings.** Every string, including concatenation results, is
+deduplicated through a global table, so string equality is pointer equality.
+The intern table is *weak*: it is not a GC root, and dead entries are purged
+before the sweep so future interning can't return a dangling pointer.
+
+**Globals are late-bound, locals are compile-time slots.** Referencing an
+undefined global is a runtime error (enabling mutual recursion between
+top-level functions); locals resolve to stack slot indices at compile time and
+cost an array index at runtime.
+
+## What tier 1 (baseline JIT) will need from this code
+
+- Bytecode is already position-independent within a chunk and uses explicit
+  16-bit relative jumps — easy to template-compile.
+- Call frames are already laid out like native frames (args contiguous below
+  a frame pointer analog), so the JIT calling convention can mirror `slots`.
+- The interpreter loop is the deopt target: any JIT bailout re-enters `run()`
+  with a reconstructed `CallFrame`.
+- Missing and needed: per-opcode type feedback recording, and a function
+  hotness counter to drive tier-up. Both land in the interpreter first.
+
+## Known limitations (deliberate, roadmap items)
+
+- No closures: an inner function referencing an enclosing function's *local*
+  compiles to a global lookup and fails at runtime. Upvalues are the fix.
+- No classes/objects beyond strings and functions.
+- Constant pool capped at 256 entries per chunk (no `OP_CONSTANT_LONG` yet).
+- The value stack (65,536 slots) is not overflow-checked per push; deep
+  non-recursive nesting could overflow it. Frame count *is* checked (256).
