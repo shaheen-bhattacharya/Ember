@@ -13,7 +13,7 @@ enum class InterpretResult {
 };
 
 struct CallFrame {
-  ObjFunction* function;
+  ObjClosure* closure;
   uint8_t* ip;
   Value* slots;  // window into the VM value stack for this frame's locals
 };
@@ -35,6 +35,7 @@ class VM {
   Value stack_[STACK_MAX];
   Value* stackTop_ = stack_;
   std::unordered_map<ObjString*, Value> globals_;
+  ObjUpvalue* openUpvalues_ = nullptr;  // sorted by stack slot, outermost first
   bool traceExecution_ = false;
 
   InterpretResult run();
@@ -42,8 +43,10 @@ class VM {
   void push(const Value& value);
   Value pop();
   const Value& peek(int distance) const;
-  bool call(ObjFunction* function, int argCount);
+  bool call(ObjClosure* closure, int argCount);
   bool callValue(const Value& callee, int argCount);
+  ObjUpvalue* captureUpvalue(Value* local);
+  void closeUpvalues(Value* last);
   void concatenate();
   void defineNative(const char* name, NativeFn function);
   void runtimeError(const char* format, ...);

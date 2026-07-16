@@ -9,6 +9,8 @@ enum class ObjType : uint8_t {
   STRING,
   FUNCTION,
   NATIVE,
+  CLOSURE,
+  UPVALUE,
 };
 
 struct Obj {

@@ -45,6 +45,7 @@ VM::~VM() {
 void VM::resetStack() {
   stackTop_ = stack_;
   frameCount_ = 0;
+  openUpvalues_ = nullptr;
 }
 
 void VM::push(const Value& value) { *stackTop_++ = value; }
@@ -63,7 +64,7 @@ void VM::runtimeError(const char* format, ...) {
   // Stack trace, innermost frame first.
   for (int i = frameCount_ - 1; i >= 0; i--) {
     CallFrame* frame = &frames_[i];
-    ObjFunction* function = frame->function;
+    ObjFunction* function = frame->closure->function;
     size_t instruction = frame->ip - function->chunk.code.data() - 1;
     fprintf(stderr, "[line %d] in ", function->chunk.lines[instruction]);
     if (function->name == nullptr) {
@@ -86,7 +87,11 @@ void VM::markRoots() {
     gHeap.markValue(*slot);
   }
   for (int i = 0; i < frameCount_; i++) {
-    gHeap.markObject(frames_[i].function);
+    gHeap.markObject(frames_[i].closure);
+  }
+  for (ObjUpvalue* upvalue = openUpvalues_; upvalue != nullptr;
+       upvalue = upvalue->nextOpen) {
+    gHeap.markObject(upvalue);
   }
   for (auto& entry : globals_) {
     gHeap.markObject(entry.first);
@@ -94,7 +99,8 @@ void VM::markRoots() {
   }
 }
 
-bool VM::call(ObjFunction* function, int argCount) {
+bool VM::call(ObjClosure* closure, int argCount) {
+  ObjFunction* function = closure->function;
   if (argCount != function->arity) {
     runtimeError("Expected %d arguments but got %d.", function->arity,
                  argCount);
@@ -105,7 +111,7 @@ bool VM::call(ObjFunction* function, int argCount) {
     return false;
   }
   CallFrame* frame = &frames_[frameCount_++];
-  frame->function = function;
+  frame->closure = closure;
   frame->ip = function->chunk.code.data();
   frame->slots = stackTop_ - argCount - 1;
   return true;
@@ -114,8 +120,8 @@ bool VM::call(ObjFunction* function, int argCount) {
 bool VM::callValue(const Value& callee, int argCount) {
   if (callee.isObj()) {
     switch (callee.as.obj->type) {
-      case ObjType::FUNCTION:
-        return call(asFunction(callee), argCount);
+      case ObjType::CLOSURE:
+        return call(asClosure(callee), argCount);
       case ObjType::NATIVE: {
         NativeFn native = asNative(callee)->function;
         Value result = native(argCount, stackTop_ - argCount);
@@ -129,6 +135,38 @@ bool VM::callValue(const Value& callee, int argCount) {
   }
   runtimeError("Can only call functions.");
   return false;
+}
+
+// Returns the upvalue for a stack slot, reusing an existing open one so every
+// closure over the same variable shares the same storage.
+ObjUpvalue* VM::captureUpvalue(Value* local) {
+  ObjUpvalue* prev = nullptr;
+  ObjUpvalue* upvalue = openUpvalues_;
+  while (upvalue != nullptr && upvalue->location > local) {
+    prev = upvalue;
+    upvalue = upvalue->nextOpen;
+  }
+  if (upvalue != nullptr && upvalue->location == local) return upvalue;
+
+  ObjUpvalue* created = gHeap.allocate<ObjUpvalue>(local);
+  created->nextOpen = upvalue;
+  if (prev == nullptr) {
+    openUpvalues_ = created;
+  } else {
+    prev->nextOpen = created;
+  }
+  return created;
+}
+
+// Closes every open upvalue at or above `last`: the stack slots are about to
+// be popped, so the values move into the upvalue objects themselves.
+void VM::closeUpvalues(Value* last) {
+  while (openUpvalues_ != nullptr && openUpvalues_->location >= last) {
+    ObjUpvalue* upvalue = openUpvalues_;
+    upvalue->closed = *upvalue->location;
+    upvalue->location = &upvalue->closed;
+    openUpvalues_ = upvalue->nextOpen;
+  }
 }
 
 void VM::concatenate() {
@@ -146,7 +184,10 @@ InterpretResult VM::interpret(const std::string& source) {
   if (function == nullptr) return InterpretResult::COMPILE_ERROR;
 
   push(Value::object(function));
-  call(function, 0);
+  ObjClosure* closure = gHeap.allocate<ObjClosure>(function);
+  pop();
+  push(Value::object(closure));
+  call(closure, 0);
   gHeap.gcEnabled = true;
   return run();
 }
@@ -158,7 +199,8 @@ InterpretResult VM::run() {
 #define READ_SHORT() \
   (frame->ip += 2,   \
    static_cast<uint16_t>((frame->ip[-2] << 8) | frame->ip[-1]))
-#define READ_CONSTANT() (frame->function->chunk.constants[READ_BYTE()])
+#define READ_CONSTANT() \
+  (frame->closure->function->chunk.constants[READ_BYTE()])
 #define READ_STRING() (static_cast<ObjString*>(READ_CONSTANT().as.obj))
 #define BINARY_OP(op)                                     \
   do {                                                    \
@@ -179,8 +221,9 @@ InterpretResult VM::run() {
       }
       fprintf(stderr, "\n");
       disassembleInstruction(
-          frame->function->chunk,
-          static_cast<int>(frame->ip - frame->function->chunk.code.data()));
+          frame->closure->function->chunk,
+          static_cast<int>(frame->ip -
+                           frame->closure->function->chunk.code.data()));
     }
 
     uint8_t instruction = READ_BYTE();
@@ -234,6 +277,16 @@ InterpretResult VM::run() {
           return InterpretResult::RUNTIME_ERROR;
         }
         it->second = peek(0);
+        break;
+      }
+      case OP_GET_UPVALUE: {
+        uint8_t slot = READ_BYTE();
+        push(*frame->closure->upvalues[slot]->location);
+        break;
+      }
+      case OP_SET_UPVALUE: {
+        uint8_t slot = READ_BYTE();
+        *frame->closure->upvalues[slot]->location = peek(0);
         break;
       }
       case OP_EQUAL: {
@@ -309,8 +362,30 @@ InterpretResult VM::run() {
         frame = &frames_[frameCount_ - 1];
         break;
       }
+      case OP_CLOSURE: {
+        ObjFunction* function = asFunction(READ_CONSTANT());
+        ObjClosure* closure = gHeap.allocate<ObjClosure>(function);
+        // Push before capturing: captureUpvalue allocates, and the closure
+        // must be rooted if that allocation triggers a collection.
+        push(Value::object(closure));
+        for (int i = 0; i < function->upvalueCount; i++) {
+          uint8_t isLocal = READ_BYTE();
+          uint8_t index = READ_BYTE();
+          if (isLocal) {
+            closure->upvalues[i] = captureUpvalue(frame->slots + index);
+          } else {
+            closure->upvalues[i] = frame->closure->upvalues[index];
+          }
+        }
+        break;
+      }
+      case OP_CLOSE_UPVALUE:
+        closeUpvalues(stackTop_ - 1);
+        pop();
+        break;
       case OP_RETURN: {
         Value result = pop();
+        closeUpvalues(frame->slots);
         frameCount_--;
         if (frameCount_ == 0) {
           pop();  // the script function itself

@@ -48,6 +48,19 @@ undefined global is a runtime error (enabling mutual recursion between
 top-level functions); locals resolve to stack slot indices at compile time and
 cost an array index at runtime.
 
+**Closures via upvalues (the Lua design).** Every function value at runtime is
+an `ObjClosure`: compiled code plus an array of `ObjUpvalue*` captures. An
+upvalue starts *open* — a pointer into the live stack slot — so reads and
+writes through the closure and through the original variable observe each
+other. When the variable's slot is about to die (scope exit emits
+`OP_CLOSE_UPVALUE`; return closes everything at or above the frame base), the
+value migrates into the upvalue object and the pointer repoints at itself.
+The VM keeps open upvalues in a list sorted by stack address so two closures
+capturing the same variable share one upvalue, which is what makes mutation
+through one closure visible through the other. Capture is resolved entirely at
+compile time: `resolveUpvalue` threads a capture through every intermediate
+function, so the runtime never searches scopes.
+
 ## What tier 1 (baseline JIT) will need from this code
 
 - Bytecode is already position-independent within a chunk and uses explicit
@@ -61,9 +74,7 @@ cost an array index at runtime.
 
 ## Known limitations (deliberate, roadmap items)
 
-- No closures: an inner function referencing an enclosing function's *local*
-  compiles to a global lookup and fails at runtime. Upvalues are the fix.
-- No classes/objects beyond strings and functions.
+- No classes/objects beyond strings, functions, and closures.
 - Constant pool capped at 256 entries per chunk (no `OP_CONSTANT_LONG` yet).
 - The value stack (65,536 slots) is not overflow-checked per push; deep
   non-recursive nesting could overflow it. Frame count *is* checked (256).

@@ -51,6 +51,8 @@ int disassembleInstruction(const Chunk& chunk, int offset) {
     case OP_GET_GLOBAL: return constantInstruction("OP_GET_GLOBAL", chunk, offset);
     case OP_DEFINE_GLOBAL: return constantInstruction("OP_DEFINE_GLOBAL", chunk, offset);
     case OP_SET_GLOBAL: return constantInstruction("OP_SET_GLOBAL", chunk, offset);
+    case OP_GET_UPVALUE: return byteInstruction("OP_GET_UPVALUE", chunk, offset);
+    case OP_SET_UPVALUE: return byteInstruction("OP_SET_UPVALUE", chunk, offset);
     case OP_EQUAL: return simpleInstruction("OP_EQUAL", offset);
     case OP_GREATER: return simpleInstruction("OP_GREATER", offset);
     case OP_LESS: return simpleInstruction("OP_LESS", offset);
@@ -66,6 +68,21 @@ int disassembleInstruction(const Chunk& chunk, int offset) {
     case OP_JUMP_IF_FALSE: return jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
     case OP_LOOP: return jumpInstruction("OP_LOOP", -1, chunk, offset);
     case OP_CALL: return byteInstruction("OP_CALL", chunk, offset);
+    case OP_CLOSURE: {
+      int off = offset + 1;
+      uint8_t constant = chunk.code[off++];
+      printf("%-16s %4d %s\n", "OP_CLOSURE", constant,
+             valueToString(chunk.constants[constant]).c_str());
+      ObjFunction* function = asFunction(chunk.constants[constant]);
+      for (int j = 0; j < function->upvalueCount; j++) {
+        int isLocal = chunk.code[off++];
+        int index = chunk.code[off++];
+        printf("%04d      |                     %s %d\n", off - 2,
+               isLocal ? "local" : "upvalue", index);
+      }
+      return off;
+    }
+    case OP_CLOSE_UPVALUE: return simpleInstruction("OP_CLOSE_UPVALUE", offset);
     case OP_RETURN: return simpleInstruction("OP_RETURN", offset);
     default:
       printf("Unknown opcode %d\n", instruction);

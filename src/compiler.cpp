@@ -32,6 +32,15 @@ enum Precedence {
 struct Local {
   Token name;
   int depth = 0;  // -1 while declared but not yet initialized
+  bool isCaptured = false;
+};
+
+// Compile-time record of a captured variable: where the runtime closure finds
+// it — a local slot of the enclosing function, or an upvalue of the enclosing
+// closure (for captures across more than one function boundary).
+struct CompilerUpvalue {
+  uint8_t index = 0;
+  bool isLocal = false;
 };
 
 enum FunctionType { TYPE_FUNCTION, TYPE_SCRIPT };
@@ -44,6 +53,7 @@ struct FunctionCompiler {
   Local locals[UINT8_MAX + 1];
   int localCount = 0;
   int scopeDepth = 0;
+  CompilerUpvalue upvalues[UINT8_MAX + 1];
 };
 
 class Compiler;
@@ -206,7 +216,12 @@ class Compiler {
     while (current_fc_->localCount > 0 &&
            current_fc_->locals[current_fc_->localCount - 1].depth >
                current_fc_->scopeDepth) {
-      emitByte(OP_POP);
+      // A captured local must outlive its stack slot: hoist it to the heap.
+      if (current_fc_->locals[current_fc_->localCount - 1].isCaptured) {
+        emitByte(OP_CLOSE_UPVALUE);
+      } else {
+        emitByte(OP_POP);
+      }
       current_fc_->localCount--;
     }
   }
@@ -232,6 +247,39 @@ class Compiler {
         }
         return i;
       }
+    }
+    return -1;
+  }
+
+  int addUpvalue(FunctionCompiler* compiler, uint8_t index, bool isLocal) {
+    int upvalueCount = compiler->function->upvalueCount;
+    for (int i = 0; i < upvalueCount; i++) {
+      const CompilerUpvalue& upvalue = compiler->upvalues[i];
+      if (upvalue.index == index && upvalue.isLocal == isLocal) return i;
+    }
+    if (upvalueCount == UINT8_MAX + 1) {
+      error("Too many closure variables in function.");
+      return 0;
+    }
+    compiler->upvalues[upvalueCount].isLocal = isLocal;
+    compiler->upvalues[upvalueCount].index = index;
+    return compiler->function->upvalueCount++;
+  }
+
+  // Finds `name` in an enclosing function, threading it through every
+  // intermediate closure so multi-level captures resolve at compile time.
+  int resolveUpvalue(FunctionCompiler* compiler, const Token& name) {
+    if (compiler->enclosing == nullptr) return -1;
+
+    int local = resolveLocal(compiler->enclosing, name);
+    if (local != -1) {
+      compiler->enclosing->locals[local].isCaptured = true;
+      return addUpvalue(compiler, static_cast<uint8_t>(local), true);
+    }
+
+    int upvalue = resolveUpvalue(compiler->enclosing, name);
+    if (upvalue != -1) {
+      return addUpvalue(compiler, static_cast<uint8_t>(upvalue), false);
     }
     return -1;
   }
@@ -286,6 +334,9 @@ class Compiler {
     if (arg != -1) {
       getOp = OP_GET_LOCAL;
       setOp = OP_SET_LOCAL;
+    } else if ((arg = resolveUpvalue(current_fc_, name)) != -1) {
+      getOp = OP_GET_UPVALUE;
+      setOp = OP_SET_UPVALUE;
     } else {
       arg = identifierConstant(name);
       getOp = OP_GET_GLOBAL;
@@ -513,7 +564,11 @@ class Compiler {
     block();
 
     ObjFunction* function = endCompiler();
-    emitConstant(Value::object(function));
+    emitBytes(OP_CLOSURE, makeConstant(Value::object(function)));
+    for (int i = 0; i < function->upvalueCount; i++) {
+      emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
+      emitByte(compiler.upvalues[i].index);
+    }
   }
 
   void funDeclaration() {

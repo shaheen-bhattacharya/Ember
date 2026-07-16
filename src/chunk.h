@@ -17,6 +17,8 @@ enum OpCode : uint8_t {
   OP_GET_GLOBAL,     // operand: constant index of name string
   OP_DEFINE_GLOBAL,  // operand: constant index of name string
   OP_SET_GLOBAL,     // operand: constant index of name string
+  OP_GET_UPVALUE,    // operand: upvalue index in the current closure
+  OP_SET_UPVALUE,    // operand: upvalue index in the current closure
   OP_EQUAL,
   OP_GREATER,
   OP_LESS,
@@ -32,6 +34,8 @@ enum OpCode : uint8_t {
   OP_JUMP_IF_FALSE,  // operand: 16-bit forward offset
   OP_LOOP,           // operand: 16-bit backward offset
   OP_CALL,           // operand: arg count
+  OP_CLOSURE,        // operands: fn constant index, then (isLocal, index) per upvalue
+  OP_CLOSE_UPVALUE,  // hoist the captured top-of-stack local into the heap
   OP_RETURN,
 };
 

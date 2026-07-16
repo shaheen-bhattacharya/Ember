@@ -23,6 +23,17 @@ void Heap::markObject(Obj* object) {
       }
       break;
     }
+    case ObjType::CLOSURE: {
+      ObjClosure* closure = static_cast<ObjClosure*>(object);
+      markObject(closure->function);
+      for (ObjUpvalue* upvalue : closure->upvalues) {
+        markObject(upvalue);
+      }
+      break;
+    }
+    case ObjType::UPVALUE:
+      markValue(static_cast<ObjUpvalue*>(object)->closed);
+      break;
   }
 }
 

@@ -42,6 +42,13 @@ std::string valueToString(const Value& v) {
         }
         case ObjType::NATIVE:
           return "<native fn>";
+        case ObjType::CLOSURE: {
+          ObjFunction* fn = asClosure(v)->function;
+          if (fn->name == nullptr) return "<script>";
+          return "<fn " + fn->name->chars + ">";
+        }
+        case ObjType::UPVALUE:
+          return "<upvalue>";
       }
   }
   return "<unknown>";

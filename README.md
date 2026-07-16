@@ -17,7 +17,7 @@ print "fib(30) = " + str(fib(30));
 print "took " + str(clock() - start) + "s";
 ```
 
-Dynamic typing over four value kinds (`nil`, booleans, 64-bit float numbers, heap objects), first-class functions, lexically-scoped locals, `if`/`else`, `while`, `for`, short-circuiting `and`/`or`, strings with `+` concatenation, and native functions (`clock`, `str`).
+Dynamic typing over four value kinds (`nil`, booleans, 64-bit float numbers, heap objects), first-class functions and closures (with shared mutable captures, Lua-style upvalues), lexically-scoped locals, `if`/`else`, `while`, `for`, short-circuiting `and`/`or`, strings with `+` concatenation, and native functions (`clock`, `str`).
 
 ## Build and run
 
@@ -47,7 +47,7 @@ source ──lexer──> tokens ──compiler (Pratt)──> bytecode chunks �
 |---|---|---|
 | Lexer | `src/lexer.cpp` | On-demand tokenizer, zero-copy tokens into source |
 | Compiler | `src/compiler.cpp` | Single-pass Pratt parser emitting bytecode directly |
-| Bytecode | `src/chunk.h` | 27 opcodes, 16-bit jump offsets, per-byte line info |
+| Bytecode | `src/chunk.h` | 31 opcodes, 16-bit jump offsets, per-byte line info |
 | VM | `src/vm.cpp` | Stack machine, call frames as stack windows |
 | GC | `src/memory.cpp` | Mark-sweep; roots = VM stack, frames, globals; weak intern table |
 | Disassembler | `src/debug.cpp` | Powers `--dump` and `EMBER_TRACE` |
@@ -59,7 +59,8 @@ Design details and the rationale for each decision are in [docs/DESIGN.md](docs/
 The point of this project is the full tiered-execution architecture:
 
 - [x] **Tier 0 — bytecode interpreter** (this repo today)
-- [ ] Closures with upvalues; classes if the fancy strikes
+- [x] Closures with upvalues (shared mutable capture, closed on scope exit)
+- [ ] Classes if the fancy strikes
 - [ ] Type feedback: inline caches recording observed operand types at call/binary-op sites
 - [ ] **Tier 1 — baseline JIT**: template-compile bytecode to AArch64, `mmap(MAP_JIT)` code pages, interpreter↔JIT calling convention
 - [ ] **Tier 2 — optimizing JIT**: SSA IR, type specialization from recorded feedback, inlining, DCE, linear-scan register allocation
