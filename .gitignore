@@ -1,3 +1,9 @@
 build/
 ember
+*.o
+*.dSYM/
 .DS_Store
+.vscode/
+.idea/
+.cache/
+compile_commands.json
