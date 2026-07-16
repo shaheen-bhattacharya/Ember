@@ -3,8 +3,13 @@ CXXFLAGS := -std=c++17 -O2 -Wall -Wextra
 SRC := $(wildcard src/*.cpp)
 OBJ := $(SRC:src/%.cpp=build/%.o)
 
+all: ember
+
 ember: $(OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $(OBJ)
+
+repl: ember
+	./ember
 
 build/%.o: src/%.cpp $(wildcard src/*.h) | build
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -24,4 +29,4 @@ bench: ember
 clean:
 	rm -rf build ember
 
-.PHONY: debug test bench clean
+.PHONY: all repl debug test bench clean
