@@ -26,6 +26,16 @@ static Value strNative(int argCount, Value* args) {
   return Value::object(copyString(valueToString(args[0])));
 }
 
+static Value sqrtNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isNumber()) return Value::nil();
+  return Value::number(sqrt(args[0].as.number));
+}
+
+static Value absNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isNumber()) return Value::nil();
+  return Value::number(fabs(args[0].as.number));
+}
+
 // ---- profiling helpers ----
 
 static inline uint8_t typeBit(const Value& v) {
@@ -89,6 +99,8 @@ VM::VM() {
   gHeap.logGC = getenv("EMBER_LOG_GC") != nullptr;
   defineNative("clock", clockNative);
   defineNative("str", strNative);
+  defineNative("sqrt", sqrtNative);
+  defineNative("abs", absNative);
 }
 
 VM::~VM() {
