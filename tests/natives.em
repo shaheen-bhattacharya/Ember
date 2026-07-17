@@ -7,6 +7,14 @@ print abs(5);                         // expect: 5
 print abs(-3.25);                     // expect: 3.25
 print abs(0);                         // expect: 0
 
+print floor(3.7);                     // expect: 3
+print floor(-3.7);                    // expect: -4
+print ceil(3.2);                      // expect: 4
+print ceil(-3.2);                     // expect: -3
+print floor(5);                       // expect: 5
+
 // Non-number arguments answer nil rather than erroring.
 print sqrt("four");                   // expect: nil
 print abs(nil);                       // expect: nil
+print floor(true);                    // expect: nil
+print ceil("up");                     // expect: nil
