@@ -51,10 +51,29 @@ static int dumpFile(const char* path) {
   return 0;
 }
 
+static void printUsage(FILE* out) {
+  fprintf(out,
+          "Usage: ember [options] [path]\n"
+          "\n"
+          "  (no arguments)   start the REPL\n"
+          "  path             run an Ember script\n"
+          "  --dump path      disassemble the compiled bytecode, don't run\n"
+          "  --version        print the version\n"
+          "  --help           show this help\n");
+}
+
 int main(int argc, char* argv[]) {
   VM vm;
   if (argc == 1) {
     repl(vm);
+    return 0;
+  }
+  if (argc == 2 && std::string(argv[1]) == "--version") {
+    printf("ember 0.1.0\n");
+    return 0;
+  }
+  if (argc == 2 && std::string(argv[1]) == "--help") {
+    printUsage(stdout);
     return 0;
   }
   if (argc == 2) {
@@ -63,6 +82,6 @@ int main(int argc, char* argv[]) {
   if (argc == 3 && std::string(argv[1]) == "--dump") {
     return dumpFile(argv[2]);
   }
-  fprintf(stderr, "Usage: ember [--dump] [path]\n");
+  printUsage(stderr);
   return 64;
 }
