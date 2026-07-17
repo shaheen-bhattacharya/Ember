@@ -36,6 +36,16 @@ static Value absNative(int argCount, Value* args) {
   return Value::number(fabs(args[0].as.number));
 }
 
+static Value floorNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isNumber()) return Value::nil();
+  return Value::number(floor(args[0].as.number));
+}
+
+static Value ceilNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isNumber()) return Value::nil();
+  return Value::number(ceil(args[0].as.number));
+}
+
 // ---- profiling helpers ----
 
 static inline uint8_t typeBit(const Value& v) {
@@ -101,6 +111,8 @@ VM::VM() {
   defineNative("str", strNative);
   defineNative("sqrt", sqrtNative);
   defineNative("abs", absNative);
+  defineNative("floor", floorNative);
+  defineNative("ceil", ceilNative);
 }
 
 VM::~VM() {
