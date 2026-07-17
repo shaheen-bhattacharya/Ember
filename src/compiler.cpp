@@ -173,6 +173,15 @@ class Compiler {
   }
 
   uint8_t makeConstant(const Value& value) {
+    // Reuse an existing pool entry: repeated literals and names would
+    // otherwise exhaust the 256-slot pool. Strings are interned, so
+    // valuesEqual's pointer comparison deduplicates them too.
+    Chunk& chunk = currentChunk();
+    for (int i = 0; i < static_cast<int>(chunk.constants.size()); i++) {
+      if (valuesEqual(chunk.constants[i], value)) {
+        return static_cast<uint8_t>(i);
+      }
+    }
     int constant = currentChunk().addConstant(value);
     if (constant > UINT8_MAX) {
       error("Too many constants in one chunk.");
