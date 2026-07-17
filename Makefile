@@ -26,7 +26,10 @@ test: ember
 bench: ember
 	./bench/run_bench.sh
 
+profile: ember
+	EMBER_PROFILE=1 EMBER_LOG_HOT=1 ./ember bench/fib.em
+
 clean:
 	rm -rf build ember
 
-.PHONY: all repl debug test bench clean
+.PHONY: all repl debug test bench profile clean
