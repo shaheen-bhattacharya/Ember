@@ -27,7 +27,12 @@ struct Token {
 
 class Lexer {
  public:
-  explicit Lexer(const char* source) : start_(source), current_(source) {}
+  explicit Lexer(const char* source) : start_(source), current_(source) {
+    // Skip a leading shebang so scripts can be directly executable.
+    if (current_[0] == '#' && current_[1] == '!') {
+      while (*current_ != '\n' && *current_ != '\0') current_++;
+    }
+  }
   Token scanToken();
 
  private:
