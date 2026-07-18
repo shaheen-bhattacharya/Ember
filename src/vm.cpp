@@ -36,6 +36,11 @@ static Value absNative(int argCount, Value* args) {
   return Value::number(fabs(args[0].as.number));
 }
 
+static Value lenNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isString()) return Value::nil();
+  return Value::number(static_cast<double>(asString(args[0])->chars.size()));
+}
+
 static Value floorNative(int argCount, Value* args) {
   if (argCount != 1 || !args[0].isNumber()) return Value::nil();
   return Value::number(floor(args[0].as.number));
@@ -113,6 +118,7 @@ VM::VM() {
   defineNative("abs", absNative);
   defineNative("floor", floorNative);
   defineNative("ceil", ceilNative);
+  defineNative("len", lenNative);
 }
 
 VM::~VM() {
