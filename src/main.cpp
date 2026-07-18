@@ -9,6 +9,7 @@
 #include "debug.h"
 #include "memory.h"
 #include "object.h"
+#include "version.h"
 #include "vm.h"
 
 static std::string readFile(const char* path) {
@@ -24,7 +25,8 @@ static std::string readFile(const char* path) {
 
 static void repl(VM& vm) {
   std::string line;
-  printf("ember 0.1 — tier 0 (bytecode interpreter). Ctrl-D to exit.\n");
+  printf("ember " EMBER_VERSION
+         " — tier 0 (bytecode interpreter). Ctrl-D to exit.\n");
   for (;;) {
     printf("> ");
     if (!std::getline(std::cin, line)) {
@@ -69,7 +71,7 @@ int main(int argc, char* argv[]) {
     return 0;
   }
   if (argc == 2 && std::string(argv[1]) == "--version") {
-    printf("ember 0.1.0\n");
+    printf("ember " EMBER_VERSION "\n");
     return 0;
   }
   if (argc == 2 && std::string(argv[1]) == "--help") {
