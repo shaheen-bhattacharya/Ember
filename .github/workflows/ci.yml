@@ -11,3 +11,12 @@ jobs:
         run: make
       - name: Test
         run: make test
+
+  asan:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build with AddressSanitizer
+        run: make debug
+      - name: Test under ASan
+        run: ./tests/run_tests.sh
