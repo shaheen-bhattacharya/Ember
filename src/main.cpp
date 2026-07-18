@@ -58,6 +58,7 @@ static void printUsage(FILE* out) {
           "  (no arguments)   start the REPL\n"
           "  path             run an Ember script\n"
           "  --dump path      disassemble the compiled bytecode, don't run\n"
+          "  -e, --eval code  run code given on the command line\n"
           "  --version        print the version\n"
           "  --help           show this help\n");
 }
@@ -81,6 +82,13 @@ int main(int argc, char* argv[]) {
   }
   if (argc == 3 && std::string(argv[1]) == "--dump") {
     return dumpFile(argv[2]);
+  }
+  if (argc == 3 &&
+      (std::string(argv[1]) == "-e" || std::string(argv[1]) == "--eval")) {
+    InterpretResult result = vm.interpret(argv[2]);
+    if (result == InterpretResult::COMPILE_ERROR) return 65;
+    if (result == InterpretResult::RUNTIME_ERROR) return 70;
+    return 0;
   }
   printUsage(stderr);
   return 64;
