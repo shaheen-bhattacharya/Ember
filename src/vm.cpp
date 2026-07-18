@@ -389,12 +389,38 @@ InterpretResult VM::run() {
         push(Value::boolean(valuesEqual(a, b)));
         break;
       }
-      case OP_GREATER:
-        BINARY_OP(Value::boolean(a > b));
+      case OP_GREATER: {
+        RECORD_TYPES(typeBit(peek(0)) | typeBit(peek(1)));
+        if (peek(0).isString() && peek(1).isString()) {
+          ObjString* b = asString(pop());
+          ObjString* a = asString(pop());
+          push(Value::boolean(a->chars > b->chars));
+        } else if (peek(0).isNumber() && peek(1).isNumber()) {
+          double b = pop().as.number;
+          double a = pop().as.number;
+          push(Value::boolean(a > b));
+        } else {
+          runtimeError("Operands must be two numbers or two strings.");
+          return InterpretResult::RUNTIME_ERROR;
+        }
         break;
-      case OP_LESS:
-        BINARY_OP(Value::boolean(a < b));
+      }
+      case OP_LESS: {
+        RECORD_TYPES(typeBit(peek(0)) | typeBit(peek(1)));
+        if (peek(0).isString() && peek(1).isString()) {
+          ObjString* b = asString(pop());
+          ObjString* a = asString(pop());
+          push(Value::boolean(a->chars < b->chars));
+        } else if (peek(0).isNumber() && peek(1).isNumber()) {
+          double b = pop().as.number;
+          double a = pop().as.number;
+          push(Value::boolean(a < b));
+        } else {
+          runtimeError("Operands must be two numbers or two strings.");
+          return InterpretResult::RUNTIME_ERROR;
+        }
         break;
+      }
       case OP_ADD: {
         RECORD_TYPES(typeBit(peek(0)) | typeBit(peek(1)));
         if (peek(0).isString() && peek(1).isString()) {
