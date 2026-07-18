@@ -1,7 +1,8 @@
 CXX := clang++
-CXXFLAGS := -std=c++17 -O2 -Wall -Wextra
+CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -MMD -MP
 SRC := $(wildcard src/*.cpp)
 OBJ := $(SRC:src/%.cpp=build/%.o)
+DEP := $(OBJ:.o=.d)
 
 all: ember
 
@@ -11,13 +12,17 @@ ember: $(OBJ)
 repl: ember
 	./ember
 
-build/%.o: src/%.cpp $(wildcard src/*.h) | build
+build/%.o: src/%.cpp | build
 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compiler-generated header dependencies: touching one header only rebuilds
+# the objects that actually include it.
+-include $(DEP)
 
 build:
 	mkdir -p build
 
-debug: CXXFLAGS := -std=c++17 -g -O0 -Wall -Wextra -fsanitize=address
+debug: CXXFLAGS := -std=c++17 -g -O0 -Wall -Wextra -fsanitize=address -MMD -MP
 debug: clean ember
 
 test: ember
