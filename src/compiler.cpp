@@ -356,6 +356,14 @@ class Compiler {
     if (canAssign && match(TOKEN_EQUAL)) {
       expression();
       emitBytes(setOp, static_cast<uint8_t>(arg));
+    } else if (canAssign && (check(TOKEN_PLUS_EQUAL) || check(TOKEN_MINUS_EQUAL))) {
+      // Desugar `x op= e` to `x = x op e`.
+      bool isAdd = check(TOKEN_PLUS_EQUAL);
+      advance();  // consume the compound operator
+      emitBytes(getOp, static_cast<uint8_t>(arg));
+      expression();
+      emitByte(isAdd ? OP_ADD : OP_SUBTRACT);
+      emitBytes(setOp, static_cast<uint8_t>(arg));
     } else {
       emitBytes(getOp, static_cast<uint8_t>(arg));
     }
