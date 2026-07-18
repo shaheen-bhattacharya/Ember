@@ -13,7 +13,16 @@ fi
 for file in "$DIR"/*.em; do
   name="$(basename "$file")"
   echo "== $name =="
+  best=""
   for run in 1 2 3; do
-    "$BIN" "$file" | sed "s/^/  run$run: /"
+    out="$("$BIN" "$file")"
+    echo "$out" | sed "s/^/  run$run: /"
+    t="$(echo "$out" | awk '/^elapsed_s / {print $2}')"
+    if [ -n "$t" ]; then
+      if [ -z "$best" ] || awk "BEGIN{exit !($t < $best)}"; then
+        best="$t"
+      fi
+    fi
   done
+  [ -n "$best" ] && echo "  best:  ${best}s"
 done

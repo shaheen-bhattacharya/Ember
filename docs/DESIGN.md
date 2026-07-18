@@ -100,5 +100,7 @@ interpreter tier, paid only until hot code tiers up.
 
 - No classes/objects beyond strings, functions, and closures.
 - Constant pool capped at 256 entries per chunk (no `OP_CONSTANT_LONG` yet).
-- The value stack (65,536 slots) is not overflow-checked per push; deep
-  non-recursive nesting could overflow it. Frame count *is* checked (256).
+- The value stack (65,536 slots) is guarded at call boundaries (each call
+  reserves 256 slots of headroom) but not per push, so a single expression
+  with pathological temporary depth inside one frame can still overflow.
+  Frame count is checked too (256).

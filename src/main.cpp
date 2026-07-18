@@ -9,6 +9,7 @@
 #include "debug.h"
 #include "memory.h"
 #include "object.h"
+#include "version.h"
 #include "vm.h"
 
 static std::string readFile(const char* path) {
@@ -24,7 +25,8 @@ static std::string readFile(const char* path) {
 
 static void repl(VM& vm) {
   std::string line;
-  printf("ember 0.1 — tier 0 (bytecode interpreter). Ctrl-D to exit.\n");
+  printf("ember " EMBER_VERSION
+         " — tier 0 (bytecode interpreter). Ctrl-D to exit.\n");
   for (;;) {
     printf("> ");
     if (!std::getline(std::cin, line)) {
@@ -58,6 +60,7 @@ static void printUsage(FILE* out) {
           "  (no arguments)   start the REPL\n"
           "  path             run an Ember script\n"
           "  --dump path      disassemble the compiled bytecode, don't run\n"
+          "  -e, --eval code  run code given on the command line\n"
           "  --version        print the version\n"
           "  --help           show this help\n");
 }
@@ -69,7 +72,7 @@ int main(int argc, char* argv[]) {
     return 0;
   }
   if (argc == 2 && std::string(argv[1]) == "--version") {
-    printf("ember 0.1.0\n");
+    printf("ember " EMBER_VERSION "\n");
     return 0;
   }
   if (argc == 2 && std::string(argv[1]) == "--help") {
@@ -81,6 +84,13 @@ int main(int argc, char* argv[]) {
   }
   if (argc == 3 && std::string(argv[1]) == "--dump") {
     return dumpFile(argv[2]);
+  }
+  if (argc == 3 &&
+      (std::string(argv[1]) == "-e" || std::string(argv[1]) == "--eval")) {
+    InterpretResult result = vm.interpret(argv[2]);
+    if (result == InterpretResult::COMPILE_ERROR) return 65;
+    if (result == InterpretResult::RUNTIME_ERROR) return 70;
+    return 0;
   }
   printUsage(stderr);
   return 64;

@@ -36,6 +36,11 @@ static Value absNative(int argCount, Value* args) {
   return Value::number(fabs(args[0].as.number));
 }
 
+static Value lenNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isString()) return Value::nil();
+  return Value::number(static_cast<double>(asString(args[0])->chars.size()));
+}
+
 static Value floorNative(int argCount, Value* args) {
   if (argCount != 1 || !args[0].isNumber()) return Value::nil();
   return Value::number(floor(args[0].as.number));
@@ -127,6 +132,7 @@ VM::VM() {
   defineNative("abs", absNative);
   defineNative("floor", floorNative);
   defineNative("ceil", ceilNative);
+  defineNative("len", lenNative);
   defineNative("min", minNative);
   defineNative("max", maxNative);
 }
@@ -204,6 +210,12 @@ bool VM::call(ObjClosure* closure, int argCount) {
   }
   if (frameCount_ == FRAMES_MAX) {
     runtimeError("Stack overflow.");
+    return false;
+  }
+  // Reserve headroom for the frame's worst case (256 locals) so pushes inside
+  // the callee can't run off the end of the value stack.
+  if ((stackTop_ - stack_) + (UINT8_MAX + 1) > STACK_MAX) {
+    runtimeError("Value stack overflow.");
     return false;
   }
   function->callCount++;
@@ -405,12 +417,38 @@ InterpretResult VM::run() {
         push(Value::boolean(valuesEqual(a, b)));
         break;
       }
-      case OP_GREATER:
-        BINARY_OP(Value::boolean(a > b));
+      case OP_GREATER: {
+        RECORD_TYPES(typeBit(peek(0)) | typeBit(peek(1)));
+        if (peek(0).isString() && peek(1).isString()) {
+          ObjString* b = asString(pop());
+          ObjString* a = asString(pop());
+          push(Value::boolean(a->chars > b->chars));
+        } else if (peek(0).isNumber() && peek(1).isNumber()) {
+          double b = pop().as.number;
+          double a = pop().as.number;
+          push(Value::boolean(a > b));
+        } else {
+          runtimeError("Operands must be two numbers or two strings.");
+          return InterpretResult::RUNTIME_ERROR;
+        }
         break;
-      case OP_LESS:
-        BINARY_OP(Value::boolean(a < b));
+      }
+      case OP_LESS: {
+        RECORD_TYPES(typeBit(peek(0)) | typeBit(peek(1)));
+        if (peek(0).isString() && peek(1).isString()) {
+          ObjString* b = asString(pop());
+          ObjString* a = asString(pop());
+          push(Value::boolean(a->chars < b->chars));
+        } else if (peek(0).isNumber() && peek(1).isNumber()) {
+          double b = pop().as.number;
+          double a = pop().as.number;
+          push(Value::boolean(a < b));
+        } else {
+          runtimeError("Operands must be two numbers or two strings.");
+          return InterpretResult::RUNTIME_ERROR;
+        }
         break;
+      }
       case OP_ADD: {
         RECORD_TYPES(typeBit(peek(0)) | typeBit(peek(1)));
         if (peek(0).isString() && peek(1).isString()) {
