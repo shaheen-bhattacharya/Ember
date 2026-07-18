@@ -196,6 +196,12 @@ bool VM::call(ObjClosure* closure, int argCount) {
     runtimeError("Stack overflow.");
     return false;
   }
+  // Reserve headroom for the frame's worst case (256 locals) so pushes inside
+  // the callee can't run off the end of the value stack.
+  if ((stackTop_ - stack_) + (UINT8_MAX + 1) > STACK_MAX) {
+    runtimeError("Value stack overflow.");
+    return false;
+  }
   function->callCount++;
   maybeMarkHot(function, logHot_);
   CallFrame* frame = &frames_[frameCount_++];
