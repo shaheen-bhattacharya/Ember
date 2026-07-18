@@ -46,6 +46,20 @@ static Value ceilNative(int argCount, Value* args) {
   return Value::number(ceil(args[0].as.number));
 }
 
+static Value minNative(int argCount, Value* args) {
+  if (argCount != 2 || !args[0].isNumber() || !args[1].isNumber()) {
+    return Value::nil();
+  }
+  return Value::number(fmin(args[0].as.number, args[1].as.number));
+}
+
+static Value maxNative(int argCount, Value* args) {
+  if (argCount != 2 || !args[0].isNumber() || !args[1].isNumber()) {
+    return Value::nil();
+  }
+  return Value::number(fmax(args[0].as.number, args[1].as.number));
+}
+
 // ---- profiling helpers ----
 
 static inline uint8_t typeBit(const Value& v) {
@@ -113,6 +127,8 @@ VM::VM() {
   defineNative("abs", absNative);
   defineNative("floor", floorNative);
   defineNative("ceil", ceilNative);
+  defineNative("min", minNative);
+  defineNative("max", maxNative);
 }
 
 VM::~VM() {
