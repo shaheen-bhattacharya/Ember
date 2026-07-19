@@ -18,7 +18,7 @@ big-endian offsets relative to the instruction after the operand. Use
 | `OP_GET_UPVALUE` | upvalue index | push | reads through `location` |
 | `OP_SET_UPVALUE` | upvalue index | peek | writes through `location` |
 | `OP_EQUAL` | — | pop 2, push | any types; interned-pointer equality for strings |
-| `OP_GREATER` / `OP_LESS` | — | pop 2, push | numbers only |
+| `OP_GREATER` / `OP_LESS` | — | pop 2, push | two numbers, or two strings (lexicographic) |
 | `OP_ADD` | — | pop 2, push | numbers add, strings concatenate |
 | `OP_SUBTRACT` / `OP_MULTIPLY` / `OP_DIVIDE` / `OP_MODULO` | — | pop 2, push | numbers only; `%` is `fmod` |
 | `OP_NOT` | — | pop, push | truthiness: `nil`/`false` are falsey |
