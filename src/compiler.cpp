@@ -744,6 +744,17 @@ class Compiler {
     currentLoop_->breakJumps.push_back(emitJump(OP_JUMP));
   }
 
+  void continueStatement() {
+    if (currentLoop_ == nullptr) {
+      error("Can't use 'continue' outside of a loop.");
+    }
+    consume(TOKEN_SEMICOLON, "Expect ';' after 'continue'.");
+    if (currentLoop_ == nullptr) return;
+    discardLoopLocals();
+    // Jump back to the condition (while) or the increment clause (for).
+    emitLoop(currentLoop_->continueTarget);
+  }
+
   void printStatement() {
     expression();
     consume(TOKEN_SEMICOLON, "Expect ';' after value.");
@@ -799,6 +810,8 @@ class Compiler {
       printStatement();
     } else if (match(TOKEN_BREAK)) {
       breakStatement();
+    } else if (match(TOKEN_CONTINUE)) {
+      continueStatement();
     } else if (match(TOKEN_IF)) {
       ifStatement();
     } else if (match(TOKEN_RETURN)) {
