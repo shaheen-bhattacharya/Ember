@@ -56,6 +56,21 @@ static Value roundNative(int argCount, Value* args) {
   return Value::number(round(args[0].as.number));
 }
 
+static Value substrNative(int argCount, Value* args) {
+  if (argCount != 3 || !args[0].isString() || !args[1].isNumber() ||
+      !args[2].isNumber()) {
+    return Value::nil();
+  }
+  double startD = args[1].as.number;
+  double lenD = args[2].as.number;
+  if (startD < 0 || lenD < 0) return Value::nil();
+  const std::string& s = asString(args[0])->chars;
+  size_t start = static_cast<size_t>(startD);
+  if (start >= s.size()) return Value::object(copyString(""));
+  return Value::object(
+      copyString(s.substr(start, static_cast<size_t>(lenD))));
+}
+
 static Value minNative(int argCount, Value* args) {
   if (argCount != 2 || !args[0].isNumber() || !args[1].isNumber()) {
     return Value::nil();
@@ -139,6 +154,7 @@ VM::VM() {
   defineNative("ceil", ceilNative);
   defineNative("round", roundNative);
   defineNative("len", lenNative);
+  defineNative("substr", substrNative);
   defineNative("min", minNative);
   defineNative("max", maxNative);
 }
