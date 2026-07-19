@@ -20,3 +20,12 @@ jobs:
         run: make debug
       - name: Test under ASan
         run: ./tests/run_tests.sh
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: make
+      - name: Test
+        run: make test
