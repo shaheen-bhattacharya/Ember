@@ -68,10 +68,13 @@ static bool isAlpha(char c) {
 }
 
 Token Lexer::number() {
-  while (isDigit(peek())) advance();
+  // Underscores are digit separators: allowed only between two digits.
+  while (isDigit(peek()) || (peek() == '_' && isDigit(peekNext()))) advance();
   if (peek() == '.' && isDigit(peekNext())) {
     advance();  // consume the '.'
-    while (isDigit(peek())) advance();
+    while (isDigit(peek()) || (peek() == '_' && isDigit(peekNext()))) {
+      advance();
+    }
   }
   return makeToken(TOKEN_NUMBER);
 }

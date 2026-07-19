@@ -9,3 +9,9 @@ print -0.5;             // expect: -0.5
 print 2.5 % 1;          // expect: 0.5
 print 7 % -3;           // expect: 1
 print 1.5 + 1.5;        // expect: 3
+
+// Underscores are digit separators.
+print 1_000_000;        // expect: 1000000
+print 1_000 + 1;        // expect: 1001
+print 3.141_59;         // expect: 3.14159
+print 1_2_3;            // expect: 123
