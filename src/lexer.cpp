@@ -85,7 +85,8 @@ TokenType Lexer::identifierType() const {
     TokenType type;
   };
   static const Keyword keywords[] = {
-      {"and", TOKEN_AND},       {"else", TOKEN_ELSE},   {"false", TOKEN_FALSE},
+      {"and", TOKEN_AND},       {"break", TOKEN_BREAK},
+      {"else", TOKEN_ELSE},   {"false", TOKEN_FALSE},
       {"for", TOKEN_FOR},       {"fun", TOKEN_FUN},     {"if", TOKEN_IF},
       {"nil", TOKEN_NIL},       {"or", TOKEN_OR},       {"print", TOKEN_PRINT},
       {"return", TOKEN_RETURN}, {"true", TOKEN_TRUE},   {"var", TOKEN_VAR},

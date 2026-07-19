@@ -46,6 +46,17 @@ struct CompilerUpvalue {
 
 enum FunctionType { TYPE_FUNCTION, TYPE_SCRIPT };
 
+// Innermost-enclosing-loop state for break/continue. `continueTarget` is the
+// bytecode offset a continue jumps back to (condition, or increment for a
+// for-loop); `scopeDepth` is the depth outside the loop body so jumps can
+// discard body locals first.
+struct LoopContext {
+  LoopContext* enclosing = nullptr;
+  int continueTarget = 0;
+  int scopeDepth = 0;
+  std::vector<int> breakJumps;
+};
+
 // Per-function compile state; nested function declarations push a new one.
 struct FunctionCompiler {
   FunctionCompiler* enclosing = nullptr;
@@ -89,6 +100,7 @@ class Compiler {
   bool hadError_ = false;
   bool panicMode_ = false;
   FunctionCompiler* current_fc_ = nullptr;
+  LoopContext* currentLoop_ = nullptr;
 
   Chunk& currentChunk() { return current_fc_->function->chunk; }
 
@@ -570,6 +582,9 @@ class Compiler {
     FunctionCompiler compiler;
     initCompiler(&compiler, type);
     beginScope();
+    // A loop in the enclosing function is not breakable from inside this one.
+    LoopContext* enclosingLoop = currentLoop_;
+    currentLoop_ = nullptr;
 
     consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
     if (!check(TOKEN_RIGHT_PAREN)) {
@@ -586,6 +601,7 @@ class Compiler {
     consume(TOKEN_LEFT_BRACE, "Expect '{' before function body.");
     block();
 
+    currentLoop_ = enclosingLoop;
     ObjFunction* function = endCompiler();
     emitBytes(OP_CLOSURE, makeConstant(Value::object(function)));
     for (int i = 0; i < function->upvalueCount; i++) {
@@ -641,10 +657,20 @@ class Compiler {
 
     int exitJump = emitJump(OP_JUMP_IF_FALSE);
     emitByte(OP_POP);
+
+    LoopContext loop;
+    loop.enclosing = currentLoop_;
+    loop.continueTarget = loopStart;
+    loop.scopeDepth = current_fc_->scopeDepth;
+    currentLoop_ = &loop;
     statement();
+    currentLoop_ = loop.enclosing;
+
     emitLoop(loopStart);
     patchJump(exitJump);
     emitByte(OP_POP);
+    // Breaks land here: past the loop and past the exit path's condition pop.
+    for (int jump : loop.breakJumps) patchJump(jump);
   }
 
   void forStatement() {
@@ -679,14 +705,43 @@ class Compiler {
       patchJump(bodyJump);
     }
 
+    LoopContext loop;
+    loop.enclosing = currentLoop_;
+    loop.continueTarget = loopStart;  // increment start when one exists
+    loop.scopeDepth = current_fc_->scopeDepth;
+    currentLoop_ = &loop;
     statement();
+    currentLoop_ = loop.enclosing;
+
     emitLoop(loopStart);
 
     if (exitJump != -1) {
       patchJump(exitJump);
       emitByte(OP_POP);
     }
+    for (int jump : loop.breakJumps) patchJump(jump);
     endScope();
+  }
+
+  // Emits pops for locals that live inside the current loop's body, without
+  // changing compile-time state — the jump leaves the scopes, the compiler
+  // doesn't.
+  void discardLoopLocals() {
+    for (int i = current_fc_->localCount - 1;
+         i >= 0 && current_fc_->locals[i].depth > currentLoop_->scopeDepth;
+         i--) {
+      emitByte(current_fc_->locals[i].isCaptured ? OP_CLOSE_UPVALUE : OP_POP);
+    }
+  }
+
+  void breakStatement() {
+    if (currentLoop_ == nullptr) {
+      error("Can't use 'break' outside of a loop.");
+    }
+    consume(TOKEN_SEMICOLON, "Expect ';' after 'break'.");
+    if (currentLoop_ == nullptr) return;
+    discardLoopLocals();
+    currentLoop_->breakJumps.push_back(emitJump(OP_JUMP));
   }
 
   void printStatement() {
@@ -742,6 +797,8 @@ class Compiler {
   void statement() {
     if (match(TOKEN_PRINT)) {
       printStatement();
+    } else if (match(TOKEN_BREAK)) {
+      breakStatement();
     } else if (match(TOKEN_IF)) {
       ifStatement();
     } else if (match(TOKEN_RETURN)) {
