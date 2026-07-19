@@ -19,7 +19,7 @@ print "fib(30) = " + str(fib(30));
 print "took " + str(clock() - start) + "s";
 ```
 
-Dynamic typing over four value kinds (`nil`, booleans, 64-bit float numbers, heap objects), first-class functions and closures (with shared mutable captures, Lua-style upvalues), lexically-scoped locals, `if`/`else`, `while`, `for`, short-circuiting `and`/`or`, strings with `+` concatenation, and native functions (`clock`, `str`, `sqrt`, `abs`). Runnable programs live in [examples/](examples/).
+Dynamic typing over four value kinds (`nil`, booleans, 64-bit float numbers, heap objects), first-class functions and closures (with shared mutable captures, Lua-style upvalues), lexically-scoped locals, `if`/`else`, `while`, `for` with `break`/`continue`, short-circuiting `and`/`or`, compound assignment (`+=`, `-=`), numeric literals with underscore separators (`1_000_000`), strings with `+` concatenation and lexicographic `<`/`>` comparison, and native functions (`clock`, `str`, `sqrt`, `abs`, `floor`, `ceil`, `round`, `min`, `max`, `len`, `substr`). Runnable programs live in [examples/](examples/).
 
 ## Build and run
 
