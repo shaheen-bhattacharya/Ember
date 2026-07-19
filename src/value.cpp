@@ -1,5 +1,6 @@
 #include "value.h"
 
+#include <cmath>
 #include <cstdio>
 
 #include "object.h"
@@ -27,6 +28,9 @@ std::string valueToString(const Value& v) {
     case ValueType::BOOL:
       return v.as.boolean ? "true" : "false";
     case ValueType::NUMBER: {
+      // Normalize NaN: x86 produces negative NaNs from 0/0 and glibc prints
+      // them as "-nan"; the sign of a NaN is meaningless, so hide it.
+      if (std::isnan(v.as.number)) return "nan";
       char buf[32];
       snprintf(buf, sizeof(buf), "%.14g", v.as.number);
       return buf;
