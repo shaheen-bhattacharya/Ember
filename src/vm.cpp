@@ -51,6 +51,11 @@ static Value ceilNative(int argCount, Value* args) {
   return Value::number(ceil(args[0].as.number));
 }
 
+static Value roundNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isNumber()) return Value::nil();
+  return Value::number(round(args[0].as.number));
+}
+
 static Value minNative(int argCount, Value* args) {
   if (argCount != 2 || !args[0].isNumber() || !args[1].isNumber()) {
     return Value::nil();
@@ -132,6 +137,7 @@ VM::VM() {
   defineNative("abs", absNative);
   defineNative("floor", floorNative);
   defineNative("ceil", ceilNative);
+  defineNative("round", roundNative);
   defineNative("len", lenNative);
   defineNative("min", minNative);
   defineNative("max", maxNative);
