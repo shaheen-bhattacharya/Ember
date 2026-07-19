@@ -13,6 +13,12 @@ print ceil(3.2);                      // expect: 4
 print ceil(-3.2);                     // expect: -3
 print floor(5);                       // expect: 5
 
+print round(2.4);                     // expect: 2
+print round(2.5);                     // expect: 3
+print round(-2.5);                    // expect: -3
+print round(7);                       // expect: 7
+print round("x");                     // expect: nil
+
 print len("hello");                   // expect: 5
 print len("");                        // expect: 0
 print len("a" + "bc");                // expect: 3
