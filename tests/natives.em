@@ -19,6 +19,13 @@ print round(-2.5);                    // expect: -3
 print round(7);                       // expect: 7
 print round("x");                     // expect: nil
 
+print substr("hello", 0, 2);          // expect: he
+print substr("hello", 1, 3);          // expect: ell
+print substr("hello", 2, 100);        // expect: llo
+print substr("hello", 9, 2) + "!";    // expect: !
+print substr("hello", -1, 2);         // expect: nil
+print substr(5, 0, 1);                // expect: nil
+
 print len("hello");                   // expect: 5
 print len("");                        // expect: 0
 print len("a" + "bc");                // expect: 3
