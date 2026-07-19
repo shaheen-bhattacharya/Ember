@@ -3,6 +3,7 @@
 // IR (see docs/DESIGN.md).
 #include "compiler.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -400,7 +401,10 @@ class Compiler {
   }
 
   void numberLit(bool) {
-    double value = strtod(previous_.start, nullptr);
+    // Strip digit-separator underscores before parsing.
+    std::string text(previous_.start, previous_.length);
+    text.erase(std::remove(text.begin(), text.end(), '_'), text.end());
+    double value = strtod(text.c_str(), nullptr);
     emitConstant(Value::number(value));
   }
 
