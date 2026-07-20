@@ -21,20 +21,23 @@ static_assert(static_cast<int>(ValueType::NIL) == 0 &&
                   static_cast<int>(ValueType::OBJ) == 3,
               "JIT assumes stable ValueType tags");
 
-// All access to VM internals goes through this friend.
-struct JitRuntime {
-  static void syncIp(VM* vm, int bcOffset) {
-    CallFrame& frame = vm->frames_[vm->frameCount_ - 1];
-    frame.ip = frame.closure->function->chunk.code.data() + bcOffset + 1;
-  }
+Value** JitRuntime::stackTopAddr(VM* vm) { return &vm->stackTop_; }
+Value* JitRuntime::topFrameSlots(VM* vm) {
+  return vm->frames_[vm->frameCount_ - 1].slots;
+}
 
-  static Value pop(VM* vm) { return *--vm->stackTop_; }
-  static void push(VM* vm, const Value& v) { *vm->stackTop_++ = v; }
-  static const Value& peek(VM* vm, int distance) {
-    return vm->stackTop_[-1 - distance];
-  }
+void JitRuntime::syncIp(VM* vm, int bcOffset) {
+  CallFrame& frame = vm->frames_[vm->frameCount_ - 1];
+  frame.ip = frame.closure->function->chunk.code.data() + bcOffset + 1;
+}
 
-  static int binary(VM* vm, int op, int bcOffset) {
+Value JitRuntime::pop(VM* vm) { return *--vm->stackTop_; }
+void JitRuntime::push(VM* vm, const Value& v) { *vm->stackTop_++ = v; }
+const Value& JitRuntime::peek(VM* vm, int distance) {
+  return vm->stackTop_[-1 - distance];
+}
+
+int JitRuntime::binary(VM* vm, int op, int bcOffset) {
     syncIp(vm, bcOffset);
     if (op == OP_ADD && peek(vm, 0).isString() && peek(vm, 1).isString()) {
       vm->concatenate();
@@ -70,67 +73,68 @@ struct JitRuntime {
       default: return 0;
     }
     return 1;
-  }
+}
 
-  static int negate(VM* vm, int bcOffset) {
-    if (!peek(vm, 0).isNumber()) {
-      syncIp(vm, bcOffset);
-      vm->runtimeError("Operand must be a number.");
-      return 0;
-    }
-    push(vm, Value::number(-pop(vm).as.number));
-    return 1;
+int JitRuntime::negate(VM* vm, int bcOffset) {
+  if (!peek(vm, 0).isNumber()) {
+    syncIp(vm, bcOffset);
+    vm->runtimeError("Operand must be a number.");
+    return 0;
   }
+  push(vm, Value::number(-pop(vm).as.number));
+  return 1;
+}
 
-  static void notOp(VM* vm) { push(vm, Value::boolean(isFalsey(pop(vm)))); }
+void JitRuntime::notOp(VM* vm) {
+  push(vm, Value::boolean(isFalsey(pop(vm))));
+}
 
-  static void equal(VM* vm) {
-    Value b = pop(vm);
-    Value a = pop(vm);
-    push(vm, Value::boolean(valuesEqual(a, b)));
+void JitRuntime::equal(VM* vm) {
+  Value b = pop(vm);
+  Value a = pop(vm);
+  push(vm, Value::boolean(valuesEqual(a, b)));
+}
+
+void JitRuntime::print(VM* vm) {
+  printf("%s\n", valueToString(pop(vm)).c_str());
+}
+
+int JitRuntime::getGlobal(VM* vm, ObjString* name, int bcOffset) {
+  auto it = vm->globals_.find(name);
+  if (it == vm->globals_.end()) {
+    syncIp(vm, bcOffset);
+    vm->runtimeError("Undefined variable '%s'.", name->chars.c_str());
+    return 0;
   }
+  push(vm, it->second);
+  return 1;
+}
 
-  static void print(VM* vm) {
-    printf("%s\n", valueToString(pop(vm)).c_str());
+int JitRuntime::setGlobal(VM* vm, ObjString* name, int bcOffset) {
+  auto it = vm->globals_.find(name);
+  if (it == vm->globals_.end()) {
+    syncIp(vm, bcOffset);
+    vm->runtimeError("Undefined variable '%s'.", name->chars.c_str());
+    return 0;
   }
+  it->second = peek(vm, 0);
+  return 1;
+}
 
-  static int getGlobal(VM* vm, ObjString* name, int bcOffset) {
-    auto it = vm->globals_.find(name);
-    if (it == vm->globals_.end()) {
-      syncIp(vm, bcOffset);
-      vm->runtimeError("Undefined variable '%s'.", name->chars.c_str());
-      return 0;
-    }
-    push(vm, it->second);
-    return 1;
-  }
+void JitRuntime::defineGlobal(VM* vm, ObjString* name) {
+  vm->globals_[name] = peek(vm, 0);
+  pop(vm);
+}
 
-  static int setGlobal(VM* vm, ObjString* name, int bcOffset) {
-    auto it = vm->globals_.find(name);
-    if (it == vm->globals_.end()) {
-      syncIp(vm, bcOffset);
-      vm->runtimeError("Undefined variable '%s'.", name->chars.c_str());
-      return 0;
-    }
-    it->second = peek(vm, 0);
-    return 1;
-  }
-
-  static void defineGlobal(VM* vm, ObjString* name) {
-    vm->globals_[name] = peek(vm, 0);
-    pop(vm);
-  }
-
-  static void returnOp(VM* vm) {
-    // JIT-compiled functions never contain OP_CLOSURE, so no open upvalues
-    // can point into this frame; skipping closeUpvalues is safe.
-    Value result = pop(vm);
-    CallFrame& frame = vm->frames_[vm->frameCount_ - 1];
-    vm->frameCount_--;
-    vm->stackTop_ = frame.slots;
-    push(vm, result);
-  }
-};
+void JitRuntime::returnOp(VM* vm) {
+  // JIT-compiled functions never contain OP_CLOSURE, so no open upvalues
+  // can point into this frame; skipping closeUpvalues is safe.
+  Value result = pop(vm);
+  CallFrame& frame = vm->frames_[vm->frameCount_ - 1];
+  vm->frameCount_--;
+  vm->stackTop_ = frame.slots;
+  push(vm, result);
+}
 
 extern "C" {
 

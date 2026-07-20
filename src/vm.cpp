@@ -8,6 +8,7 @@
 
 #include "compiler.h"
 #include "debug.h"
+#include "jit/jit_compile.h"
 #include "memory.h"
 #include "profile.h"
 
@@ -269,8 +270,24 @@ bool VM::call(ObjClosure* closure, int argCount) {
 bool VM::callValue(const Value& callee, int argCount) {
   if (callee.isObj()) {
     switch (callee.as.obj->type) {
-      case ObjType::CLOSURE:
-        return call(asClosure(callee), argCount);
+      case ObjType::CLOSURE: {
+        ObjClosure* closure = asClosure(callee);
+        ObjFunction* fn = closure->function;
+        if (jit::enabled()) {
+          if (fn->jitState == JitState::NONE &&
+              fn->callCount + 1 >= jit::threshold()) {
+            jit::compile(fn);
+          }
+          if (fn->jitState == JitState::COMPILED) {
+            // Tier 1: run native code for the whole activation. The entry
+            // pops the frame and leaves the result on the stack, so the
+            // interpreter resumes in the caller transparently.
+            if (!call(closure, argCount)) return false;
+            return jit::execute(this, fn) != 0;
+          }
+        }
+        return call(closure, argCount);
+      }
       case ObjType::NATIVE: {
         NativeFn native = asNative(callee)->function;
         Value result = native(argCount, stackTop_ - argCount);
