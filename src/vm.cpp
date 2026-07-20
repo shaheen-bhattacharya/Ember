@@ -86,23 +86,6 @@ static Value maxNative(int argCount, Value* args) {
   return Value::number(fmax(args[0].as.number, args[1].as.number));
 }
 
-static const char* typeName(const Value& v) {
-  switch (v.type) {
-    case ValueType::NIL: return "nil";
-    case ValueType::BOOL: return "boolean";
-    case ValueType::NUMBER: return "number";
-    case ValueType::OBJ:
-      switch (v.as.obj->type) {
-        case ObjType::STRING: return "string";
-        case ObjType::FUNCTION:
-        case ObjType::CLOSURE: return "function";
-        case ObjType::NATIVE: return "native function";
-        case ObjType::UPVALUE: return "upvalue";
-      }
-  }
-  return "value";
-}
-
 // ---- profiling helpers ----
 
 static inline uint8_t typeBit(const Value& v) {
