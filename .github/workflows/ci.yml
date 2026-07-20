@@ -16,8 +16,10 @@ jobs:
         run: make test
       - name: JIT selftest
         run: ./ember --jit-selftest
-      - name: Test with JIT forced on
-        run: EMBER_JIT=1 EMBER_JIT_THRESHOLD=1 ./tests/run_tests.sh
+      - name: Test with JIT forced hot
+        run: EMBER_JIT_THRESHOLD=1 ./tests/run_tests.sh
+      - name: Test interpreter only
+        run: EMBER_JIT=0 ./tests/run_tests.sh
 
   asan:
     runs-on: macos-latest
