@@ -75,6 +75,9 @@ class TemplateCompiler {
       case OP_GET_LOCAL:
       case OP_SET_LOCAL:
       case OP_CALL:
+      case OP_GET_GLOBAL:
+      case OP_SET_GLOBAL:
+      case OP_DEFINE_GLOBAL:
         return 2;
       case OP_JUMP:
       case OP_JUMP_IF_FALSE:
@@ -301,6 +304,26 @@ class TemplateCompiler {
         emitHelper3Checked(reinterpret_cast<void*>(ember_jit_call),
                            code[offset + 1], offset);
         return offset + 2;
+      case OP_GET_GLOBAL:
+      case OP_SET_GLOBAL:
+      case OP_DEFINE_GLOBAL: {
+        // The name is an interned ObjString in the constant pool; interned
+        // strings referenced by a live function's constants can't be swept,
+        // so embedding the pointer is safe.
+        ObjString* name = asString(chunk_.constants[code[offset + 1]]);
+        if (op == OP_DEFINE_GLOBAL) {
+          a_.movReg(0, kVm);
+          a_.movImm64(1, reinterpret_cast<uint64_t>(name));
+          emitCallHelper(reinterpret_cast<void*>(ember_jit_define_global));
+        } else {
+          emitHelper3Checked(
+              op == OP_GET_GLOBAL
+                  ? reinterpret_cast<void*>(ember_jit_get_global)
+                  : reinterpret_cast<void*>(ember_jit_set_global),
+              reinterpret_cast<uint64_t>(name), offset);
+        }
+        return offset + 2;
+      }
       case OP_JUMP: {
         a_.b(targets_[offset + 3 + read16(offset + 1)]);
         return offset + 3;
