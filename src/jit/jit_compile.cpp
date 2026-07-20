@@ -362,9 +362,10 @@ class TemplateCompiler {
 namespace jit {
 
 bool enabled() {
+  // Default on where supported; EMBER_JIT=0 opts out.
   static const bool on = [] {
     const char* env = getenv("EMBER_JIT");
-    return env != nullptr && env[0] == '1';
+    return env == nullptr || env[0] != '0';
   }();
   return on;
 }
