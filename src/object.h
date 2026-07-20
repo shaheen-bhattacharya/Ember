@@ -34,11 +34,20 @@ struct CallSiteFeedback {
 constexpr uint32_t kHotCallThreshold = 1000;
 constexpr uint32_t kHotBackEdgeThreshold = 10000;
 
+// Tier-1 compilation state. UNSUPPORTED means the function uses bytecode the
+// baseline JIT doesn't handle (it stays on the interpreter forever).
+enum class JitState : uint8_t { NONE, COMPILED, UNSUPPORTED };
+
 struct ObjFunction : Obj {
   int arity = 0;
   int upvalueCount = 0;
   Chunk chunk;
   ObjString* name = nullptr;  // nullptr for the top-level script
+
+  // Tier-1 JIT: entry point of compiled code (owned by the JIT's code
+  // registry, which outlives all functions).
+  JitState jitState = JitState::NONE;
+  void* jitEntry = nullptr;
 
   // Profiling, recorded by the interpreter and consumed by the JIT tiers.
   uint32_t callCount = 0;

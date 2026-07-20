@@ -27,6 +27,8 @@ class VM {
   void markRoots();  // called by the GC
 
  private:
+  // The baseline JIT's runtime helpers operate directly on VM state.
+  friend struct JitRuntime;
   static constexpr int FRAMES_MAX = 256;
   static constexpr int STACK_MAX = FRAMES_MAX * 256;
 
@@ -39,7 +41,10 @@ class VM {
   bool traceExecution_ = false;
   bool logHot_ = false;
 
-  InterpretResult run();
+  // Runs bytecode until the frame count drops to stopDepth (0 = whole
+  // program). A non-zero stopDepth lets JIT code interpret one callee and get
+  // control back when it returns.
+  InterpretResult run(int stopDepth);
   void resetStack();
   void push(const Value& value);
   Value pop();

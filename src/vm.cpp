@@ -338,10 +338,10 @@ InterpretResult VM::interpret(const std::string& source) {
   push(Value::object(closure));
   call(closure, 0);
   gHeap.gcEnabled = true;
-  return run();
+  return run(0);
 }
 
-InterpretResult VM::run() {
+InterpretResult VM::run(int stopDepth) {
   CallFrame* frame = &frames_[frameCount_ - 1];
 
 #define READ_BYTE() (*frame->ip++)
@@ -590,6 +590,7 @@ InterpretResult VM::run() {
         }
         stackTop_ = frame->slots;
         push(result);
+        if (frameCount_ == stopDepth) return InterpretResult::OK;
         frame = &frames_[frameCount_ - 1];
         break;
       }
