@@ -1,7 +1,7 @@
 CXX := clang++
 CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -MMD -MP
-SRC := $(wildcard src/*.cpp)
-OBJ := $(SRC:src/%.cpp=build/%.o)
+SRC := $(wildcard src/*.cpp) $(wildcard src/jit/*.cpp)
+OBJ := $(patsubst src/%.cpp,build/%.o,$(SRC))
 DEP := $(OBJ:.o=.d)
 
 all: ember
@@ -20,7 +20,7 @@ build/%.o: src/%.cpp | build
 -include $(DEP)
 
 build:
-	mkdir -p build
+	mkdir -p build build/jit
 
 debug: CXXFLAGS := -std=c++17 -g -O0 -Wall -Wextra -fsanitize=address -MMD -MP
 debug: clean ember

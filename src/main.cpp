@@ -7,6 +7,7 @@
 
 #include "compiler.h"
 #include "debug.h"
+#include "jit/jit.h"
 #include "memory.h"
 #include "object.h"
 #include "version.h"
@@ -78,6 +79,9 @@ int main(int argc, char* argv[]) {
   if (argc == 2 && std::string(argv[1]) == "--help") {
     printUsage(stdout);
     return 0;
+  }
+  if (argc == 2 && std::string(argv[1]) == "--jit-selftest") {
+    return jitSelftest() ? 0 : 1;
   }
   if (argc == 2) {
     return runFile(vm, argv[1]);
