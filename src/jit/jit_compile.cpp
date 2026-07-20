@@ -74,6 +74,7 @@ class TemplateCompiler {
       case OP_CONSTANT:
       case OP_GET_LOCAL:
       case OP_SET_LOCAL:
+      case OP_CALL:
         return 2;
       case OP_JUMP:
       case OP_JUMP_IF_FALSE:
@@ -296,6 +297,10 @@ class TemplateCompiler {
       case OP_PRINT:
         emitHelper1(reinterpret_cast<void*>(ember_jit_print));
         return offset + 1;
+      case OP_CALL:
+        emitHelper3Checked(reinterpret_cast<void*>(ember_jit_call),
+                           code[offset + 1], offset);
+        return offset + 2;
       case OP_JUMP: {
         a_.b(targets_[offset + 3 + read16(offset + 1)]);
         return offset + 3;

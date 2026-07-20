@@ -73,3 +73,4 @@ struct Value {
 bool valuesEqual(const Value& a, const Value& b);
 bool isFalsey(const Value& v);
 std::string valueToString(const Value& v);
+const char* typeName(const Value& v);

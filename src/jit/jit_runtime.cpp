@@ -9,6 +9,7 @@
 #include "../object.h"
 #include "../value.h"
 #include "../vm.h"
+#include "jit_compile.h"
 
 // The template compiler hard-codes these offsets and tag values into machine
 // code; fail the build if the layout drifts.
@@ -126,6 +127,39 @@ void JitRuntime::defineGlobal(VM* vm, ObjString* name) {
   pop(vm);
 }
 
+int JitRuntime::callOp(VM* vm, int argCount, int bcOffset) {
+  // Keep the caller frame's ip at the call site so stack traces through JIT
+  // frames report the right line.
+  syncIp(vm, bcOffset);
+  const Value& callee = peek(vm, argCount);
+  if (callee.isObj()) {
+    if (callee.as.obj->type == ObjType::CLOSURE) {
+      ObjClosure* closure = asClosure(callee);
+      ObjFunction* fn = closure->function;
+      if (fn->jitState == JitState::NONE &&
+          fn->callCount + 1 >= jit::threshold()) {
+        jit::compile(fn);
+      }
+      if (fn->jitState == JitState::COMPILED) {
+        if (!vm->call(closure, argCount)) return 0;
+        return jit::execute(vm, fn);  // JIT -> JIT, native recursion
+      }
+      // JIT -> interpreter: run just this callee, then take back control.
+      if (!vm->call(closure, argCount)) return 0;
+      return vm->run(vm->frameCount_ - 1) == InterpretResult::OK ? 1 : 0;
+    }
+    if (callee.as.obj->type == ObjType::NATIVE) {
+      NativeFn native = asNative(callee)->function;
+      Value result = native(argCount, vm->stackTop_ - argCount);
+      vm->stackTop_ -= argCount + 1;
+      push(vm, result);
+      return 1;
+    }
+  }
+  vm->runtimeError("Can only call functions; got a %s.", typeName(callee));
+  return 0;
+}
+
 void JitRuntime::returnOp(VM* vm) {
   // JIT-compiled functions never contain OP_CLOSURE, so no open upvalues
   // can point into this frame; skipping closeUpvalues is safe.
@@ -157,5 +191,8 @@ void ember_jit_define_global(VM* vm, ObjString* name) {
   JitRuntime::defineGlobal(vm, name);
 }
 void ember_jit_return(VM* vm) { JitRuntime::returnOp(vm); }
+int ember_jit_call(VM* vm, int argCount, int bcOffset) {
+  return JitRuntime::callOp(vm, argCount, bcOffset);
+}
 
 }  // extern "C"
