@@ -10,6 +10,7 @@
 #if EMBER_JIT_SUPPORTED
 
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "../chunk.h"
@@ -41,11 +42,14 @@ class TemplateCompiler {
       : chunk_(fn->chunk), a_(buf) {}
 
   bool compile() {
+    if (!prescan()) return false;  // unsupported opcode somewhere
     emitPrologue();
     const std::vector<uint8_t>& code = chunk_.code;
     for (size_t offset = 0; offset < code.size();) {
+      auto target = targets_.find(static_cast<int>(offset));
+      if (target != targets_.end()) a_.bind(target->second);
       size_t next = emitOp(static_cast<int>(offset));
-      if (next == 0) return false;  // unsupported opcode
+      if (next == 0) return false;
       offset = next;
     }
     a_.bind(errorExit_);
@@ -58,6 +62,62 @@ class TemplateCompiler {
   const Chunk& chunk_;
   a64::Assembler a_;
   a64::Label errorExit_;
+  std::unordered_map<int, a64::Label> targets_;  // bytecode offset -> label
+
+  int read16(int offset) const {
+    return (chunk_.code[offset] << 8) | chunk_.code[offset + 1];
+  }
+
+  // Instruction length, or -1 for opcodes the template compiler can't emit.
+  int supportedLength(uint8_t op) const {
+    switch (op) {
+      case OP_CONSTANT:
+      case OP_GET_LOCAL:
+      case OP_SET_LOCAL:
+        return 2;
+      case OP_JUMP:
+      case OP_JUMP_IF_FALSE:
+      case OP_LOOP:
+        return 3;
+      case OP_NIL:
+      case OP_TRUE:
+      case OP_FALSE:
+      case OP_POP:
+      case OP_EQUAL:
+      case OP_GREATER:
+      case OP_LESS:
+      case OP_ADD:
+      case OP_SUBTRACT:
+      case OP_MULTIPLY:
+      case OP_DIVIDE:
+      case OP_MODULO:
+      case OP_NOT:
+      case OP_NEGATE:
+      case OP_PRINT:
+      case OP_RETURN:
+        return 1;
+      default:
+        return -1;
+    }
+  }
+
+  // Validates every opcode is supported and collects branch targets.
+  bool prescan() {
+    const std::vector<uint8_t>& code = chunk_.code;
+    for (size_t offset = 0; offset < code.size();) {
+      uint8_t op = code[offset];
+      int length = supportedLength(op);
+      if (length < 0) return false;
+      int next = static_cast<int>(offset) + length;
+      if (op == OP_JUMP || op == OP_JUMP_IF_FALSE) {
+        targets_[next + read16(static_cast<int>(offset) + 1)];
+      } else if (op == OP_LOOP) {
+        targets_[next - read16(static_cast<int>(offset) + 1)];
+      }
+      offset = static_cast<size_t>(next);
+    }
+    return true;
+  }
 
   void emitPrologue() {
     a_.stpPreX(29, 30, 31, -16);
@@ -236,6 +296,28 @@ class TemplateCompiler {
       case OP_PRINT:
         emitHelper1(reinterpret_cast<void*>(ember_jit_print));
         return offset + 1;
+      case OP_JUMP: {
+        a_.b(targets_[offset + 3 + read16(offset + 1)]);
+        return offset + 3;
+      }
+      case OP_LOOP: {
+        a_.b(targets_[offset + 3 - read16(offset + 1)]);
+        return offset + 3;
+      }
+      case OP_JUMP_IF_FALSE: {
+        // Falsey = nil, or boolean false. Condition stays on the stack.
+        a64::Label& target = targets_[offset + 3 + read16(offset + 1)];
+        a64::Label truthy;
+        a_.ldrX(0, kTopAddr, 0);
+        a_.ldurbW(1, 0, -16);       // type tag of top of stack
+        a_.cbzW(1, target);         // NIL -> falsey
+        a_.cmpImmW(1, 1);           // BOOL?
+        a_.bCond(a64::NE, truthy);  // any other type is truthy
+        a_.ldurbW(2, 0, -8);        // boolean payload
+        a_.cbzW(2, target);
+        a_.bind(truthy);
+        return offset + 3;
+      }
       case OP_RETURN:
         emitHelper1(reinterpret_cast<void*>(ember_jit_return));
         a_.movz(0, 1);
