@@ -161,13 +161,43 @@ int JitRuntime::callOp(VM* vm, int argCount, int bcOffset) {
 }
 
 void JitRuntime::returnOp(VM* vm) {
-  // JIT-compiled functions never contain OP_CLOSURE, so no open upvalues
-  // can point into this frame; skipping closeUpvalues is safe.
   Value result = pop(vm);
   CallFrame& frame = vm->frames_[vm->frameCount_ - 1];
+  vm->closeUpvalues(frame.slots);
   vm->frameCount_--;
   vm->stackTop_ = frame.slots;
   push(vm, result);
+}
+
+void JitRuntime::closureOp(VM* vm, ObjFunction* target, const uint8_t* pairs) {
+  ObjClosure* closure = gHeap.allocate<ObjClosure>(target);
+  // Root the closure before capturing: captureUpvalue allocates.
+  push(vm, Value::object(closure));
+  CallFrame& frame = vm->frames_[vm->frameCount_ - 1];
+  for (int i = 0; i < target->upvalueCount; i++) {
+    uint8_t isLocal = pairs[i * 2];
+    uint8_t index = pairs[i * 2 + 1];
+    if (isLocal) {
+      closure->upvalues[i] = vm->captureUpvalue(frame.slots + index);
+    } else {
+      closure->upvalues[i] = frame.closure->upvalues[index];
+    }
+  }
+}
+
+void JitRuntime::getUpvalue(VM* vm, int slot) {
+  CallFrame& frame = vm->frames_[vm->frameCount_ - 1];
+  push(vm, *frame.closure->upvalues[slot]->location);
+}
+
+void JitRuntime::setUpvalue(VM* vm, int slot) {
+  CallFrame& frame = vm->frames_[vm->frameCount_ - 1];
+  *frame.closure->upvalues[slot]->location = peek(vm, 0);
+}
+
+void JitRuntime::closeUpvalue(VM* vm) {
+  vm->closeUpvalues(vm->stackTop_ - 1);
+  pop(vm);
 }
 
 extern "C" {
@@ -194,5 +224,15 @@ void ember_jit_return(VM* vm) { JitRuntime::returnOp(vm); }
 int ember_jit_call(VM* vm, int argCount, int bcOffset) {
   return JitRuntime::callOp(vm, argCount, bcOffset);
 }
+void ember_jit_closure(VM* vm, ObjFunction* target, const uint8_t* pairs) {
+  JitRuntime::closureOp(vm, target, pairs);
+}
+void ember_jit_get_upvalue(VM* vm, int slot) {
+  JitRuntime::getUpvalue(vm, slot);
+}
+void ember_jit_set_upvalue(VM* vm, int slot) {
+  JitRuntime::setUpvalue(vm, slot);
+}
+void ember_jit_close_upvalue(VM* vm) { JitRuntime::closeUpvalue(vm); }
 
 }  // extern "C"

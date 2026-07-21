@@ -27,6 +27,10 @@ struct JitRuntime {
   static void defineGlobal(VM* vm, ObjString* name);
   static void returnOp(VM* vm);
   static int callOp(VM* vm, int argCount, int bcOffset);
+  static void closureOp(VM* vm, ObjFunction* target, const uint8_t* pairs);
+  static void getUpvalue(VM* vm, int slot);
+  static void setUpvalue(VM* vm, int slot);
+  static void closeUpvalue(VM* vm);
 };
 
 // C-ABI slow-path helpers that template-compiled code calls. Each fallible
@@ -45,4 +49,8 @@ int ember_jit_set_global(VM* vm, ObjString* name, int bcOffset);
 void ember_jit_define_global(VM* vm, ObjString* name);
 void ember_jit_return(VM* vm);
 int ember_jit_call(VM* vm, int argCount, int bcOffset);
+void ember_jit_closure(VM* vm, ObjFunction* target, const uint8_t* pairs);
+void ember_jit_get_upvalue(VM* vm, int slot);
+void ember_jit_set_upvalue(VM* vm, int slot);
+void ember_jit_close_upvalue(VM* vm);
 }
