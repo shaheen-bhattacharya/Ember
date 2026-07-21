@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Runs each benchmark 3 times and reports every elapsed_s line.
+# Runs each benchmark 3 times per tier (JIT enabled vs interpreter-only,
+# both forced hot so tier-up cost is included) and reports best-of-3 plus
+# the speedup. On platforms without JIT support the two columns match.
 set -u
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -10,19 +12,30 @@ if [ ! -x "$BIN" ]; then
   exit 1
 fi
 
-for file in "$DIR"/*.em; do
-  name="$(basename "$file")"
-  echo "== $name =="
-  best=""
-  for run in 1 2 3; do
-    out="$("$BIN" "$file")"
-    echo "$out" | sed "s/^/  run$run: /"
-    t="$(echo "$out" | awk '/^elapsed_s / {print $2}')"
+best_of_3() {  # $1 = EMBER_JIT value, $2 = file; echoes best elapsed_s
+  local best=""
+  for _ in 1 2 3; do
+    local t
+    t="$(EMBER_JIT=$1 EMBER_JIT_THRESHOLD=1 "$BIN" "$2" \
+         | awk '/^elapsed_s / {print $2}')"
     if [ -n "$t" ]; then
       if [ -z "$best" ] || awk "BEGIN{exit !($t < $best)}"; then
         best="$t"
       fi
     fi
   done
-  [ -n "$best" ] && echo "  best:  ${best}s"
+  echo "$best"
+}
+
+for file in "$DIR"/*.em; do
+  name="$(basename "$file")"
+  echo "== $name =="
+  EMBER_JIT=1 EMBER_JIT_THRESHOLD=1 "$BIN" "$file" | grep -v '^elapsed_s ' \
+    | sed 's/^/  /'
+  jit="$(best_of_3 1 "$file")"
+  interp="$(best_of_3 0 "$file")"
+  if [ -n "$jit" ] && [ -n "$interp" ]; then
+    printf "  interp: %ss\n  jit:    %ss\n" "$interp" "$jit"
+    awk "BEGIN{printf \"  speedup: %.2fx\n\", $interp / $jit}"
+  fi
 done
