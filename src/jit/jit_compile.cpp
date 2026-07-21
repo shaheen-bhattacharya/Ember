@@ -69,8 +69,14 @@ class TemplateCompiler {
   }
 
   // Instruction length, or -1 for opcodes the template compiler can't emit.
-  int supportedLength(uint8_t op) const {
+  int supportedLength(int offset) const {
+    uint8_t op = chunk_.code[offset];
     switch (op) {
+      case OP_CLOSURE: {
+        ObjFunction* target =
+            asFunction(chunk_.constants[chunk_.code[offset + 1]]);
+        return 2 + 2 * target->upvalueCount;
+      }
       case OP_CONSTANT:
       case OP_GET_LOCAL:
       case OP_SET_LOCAL:
@@ -78,6 +84,8 @@ class TemplateCompiler {
       case OP_GET_GLOBAL:
       case OP_SET_GLOBAL:
       case OP_DEFINE_GLOBAL:
+      case OP_GET_UPVALUE:
+      case OP_SET_UPVALUE:
         return 2;
       case OP_JUMP:
       case OP_JUMP_IF_FALSE:
@@ -99,6 +107,7 @@ class TemplateCompiler {
       case OP_NEGATE:
       case OP_PRINT:
       case OP_RETURN:
+      case OP_CLOSE_UPVALUE:
         return 1;
       default:
         return -1;
@@ -110,7 +119,7 @@ class TemplateCompiler {
     const std::vector<uint8_t>& code = chunk_.code;
     for (size_t offset = 0; offset < code.size();) {
       uint8_t op = code[offset];
-      int length = supportedLength(op);
+      int length = supportedLength(static_cast<int>(offset));
       if (length < 0) return false;
       int next = static_cast<int>(offset) + length;
       if (op == OP_JUMP || op == OP_JUMP_IF_FALSE) {
@@ -155,6 +164,13 @@ class TemplateCompiler {
   // helper(vm) — infallible.
   void emitHelper1(void* fn) {
     a_.movReg(0, kVm);
+    emitCallHelper(fn);
+  }
+
+  // helper(vm, imm) — infallible.
+  void emitHelper2(void* fn, uint64_t imm) {
+    a_.movReg(0, kVm);
+    a_.movImm64(1, imm);
     emitCallHelper(fn);
   }
 
@@ -324,6 +340,27 @@ class TemplateCompiler {
         }
         return offset + 2;
       }
+      case OP_CLOSURE: {
+        ObjFunction* target = asFunction(chunk_.constants[code[offset + 1]]);
+        // The (isLocal, index) pairs live in the caller's bytecode, which is
+        // stable for the function's lifetime; pass a direct pointer.
+        a_.movReg(0, kVm);
+        a_.movImm64(1, reinterpret_cast<uint64_t>(target));
+        a_.movImm64(2, reinterpret_cast<uint64_t>(code.data() + offset + 2));
+        emitCallHelper(reinterpret_cast<void*>(ember_jit_closure));
+        return offset + 2 + 2 * target->upvalueCount;
+      }
+      case OP_GET_UPVALUE:
+        emitHelper2(reinterpret_cast<void*>(ember_jit_get_upvalue),
+                    code[offset + 1]);
+        return offset + 2;
+      case OP_SET_UPVALUE:
+        emitHelper2(reinterpret_cast<void*>(ember_jit_set_upvalue),
+                    code[offset + 1]);
+        return offset + 2;
+      case OP_CLOSE_UPVALUE:
+        emitHelper1(reinterpret_cast<void*>(ember_jit_close_upvalue));
+        return offset + 1;
       case OP_JUMP: {
         a_.b(targets_[offset + 3 + read16(offset + 1)]);
         return offset + 3;
