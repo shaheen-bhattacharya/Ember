@@ -96,6 +96,47 @@ by call count. Recording costs roughly 20–40% on the benchmarks (fib
 0.10s→0.13s, tight loop 0.38s→0.53s) — the standard price of a profiling
 interpreter tier, paid only until hot code tiers up.
 
+## Tier 1: the baseline template JIT (src/jit/)
+
+When a function's call count crosses `EMBER_JIT_THRESHOLD` (default: the
+profiler's hot threshold), its bytecode is template-compiled to AArch64 and
+subsequent calls run the native entry instead of the dispatch loop.
+
+**Execution model.** Emitted code keeps the VM's value stack as the single
+source of truth: x19 holds the VM, x20 points at `stackTop_`, x21 at the
+frame's slot base. There is no register allocation — every op loads and
+stores the simulated stack, exactly like the interpreter minus dispatch.
+That's the deliberate baseline trade-off: correctness and compile speed now,
+an SSA tier later.
+
+**Fast paths and helpers.** Arithmetic and comparisons inline the
+number-number case (tag guards, unboxed `fadd`/`fcmp` on doubles); everything
+else — string concat, globals, equality, print, errors — calls C-ABI helpers
+(`ember_jit_*`) that reuse interpreter semantics. Because stackTop is written
+back before every helper call, every GC safepoint sees a coherent stack, and
+helpers sync the frame ip so error stack traces are line-accurate through JIT
+frames.
+
+**Calls.** JIT→JIT calls invoke the callee's native entry directly (C-stack
+recursion, bounded by the 256-frame cap). JIT→interpreter uses
+`run(stopDepth)` to interpret exactly one activation. Tier-up also triggers
+from JIT call sites, so a function called only from compiled code still gets
+compiled.
+
+**W^X.** Code buffers are `MAP_JIT` pages on macOS, toggled with
+`pthread_jit_write_protect_np` and flushed with `sys_icache_invalidate`
+(mprotect + `__builtin___clear_cache` elsewhere). Compiled code lives in a
+process-lifetime registry; functions are GC'd, code is not (code GC is a
+non-goal for the baseline).
+
+**What doesn't compile.** Functions containing `OP_CLOSURE`,
+`OP_GET/SET_UPVALUE`, or `OP_CLOSE_UPVALUE` are marked UNSUPPORTED and stay
+interpreted forever — upvalue semantics interact with the open-upvalue list
+and are tier-2 work. Top-level script code never tiers (it runs once).
+Measured on Apple Silicon: tight numeric loops 3.9×, call-heavy recursion
+2.2×, allocation-bound workloads ~1× (the GC, not dispatch, is the
+bottleneck there — as expected).
+
 ## Known limitations (deliberate, roadmap items)
 
 - No classes/objects beyond strings, functions, and closures.
