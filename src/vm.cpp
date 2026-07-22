@@ -147,6 +147,7 @@ VM::VM() {
   traceExecution_ = getenv("EMBER_TRACE") != nullptr;
   logHot_ = getenv("EMBER_LOG_HOT") != nullptr;
   gHeap.logGC = getenv("EMBER_LOG_GC") != nullptr;
+  gHeap.stressGC = getenv("EMBER_GC_STRESS") != nullptr;
   defineNative("clock", clockNative);
   defineNative("str", strNative);
   defineNative("sqrt", sqrtNative);

@@ -23,12 +23,13 @@ class Heap {
   VM* vm = nullptr;
   bool gcEnabled = false;
   bool logGC = false;
+  bool stressGC = false;  // EMBER_GC_STRESS=1: collect before every allocation
 
   template <typename T, typename... Args>
   T* allocate(Args&&... args) {
     // Collect *before* allocating so a triggering allocation can't be swept
     // out from under its caller before it becomes reachable.
-    if (gcEnabled && bytesAllocated + sizeof(T) > nextGC) {
+    if (gcEnabled && (stressGC || bytesAllocated + sizeof(T) > nextGC)) {
       collectGarbage();
     }
     T* obj = new T(std::forward<Args>(args)...);
