@@ -26,6 +26,25 @@ std::vector<std::unique_ptr<CodeBuffer>>& codeRegistry() {
   return registry;
 }
 
+struct JitStats {
+  int compiled = 0;
+  int rejected = 0;
+  size_t bytecodeBytes = 0;
+  size_t nativeBytes = 0;
+};
+JitStats gStats;
+
+// Hex dump in a shape `llvm-mc --disassemble` accepts, for eyeballing the
+// emitted code: EMBER_JIT_DUMP=1.
+void dumpCode(const char* name, const CodeBuffer& buf) {
+  fprintf(stderr, "[jit] -- %s (%zu bytes) --\n", name, buf.size());
+  const uint8_t* code = buf.base();
+  for (size_t i = 0; i < buf.size(); i += 4) {
+    fprintf(stderr, "  0x%04zx: 0x%02x 0x%02x 0x%02x 0x%02x\n", i, code[i],
+            code[i + 1], code[i + 2], code[i + 3]);
+  }
+}
+
 using JitEntry = int (*)(VM* vm, Value** stackTopAddr, Value* slots);
 
 // Register conventions inside emitted code:
@@ -519,23 +538,39 @@ void compile(ObjFunction* fn) {
   }
 
   TemplateCompiler compiler(fn, *buf);
+  const char* name = fn->name ? fn->name->chars.c_str() : "<script>";
   if (!compiler.compile()) {
     fn->jitState = JitState::UNSUPPORTED;
+    gStats.rejected++;
     if (logJit) {
-      fprintf(stderr, "[jit] %s not compiled (unsupported bytecode)\n",
-              fn->name ? fn->name->chars.c_str() : "<script>");
+      fprintf(stderr, "[jit] %s not compiled (unsupported bytecode)\n", name);
     }
     return;
   }
   buf->finalize();
   fn->jitEntry = reinterpret_cast<void*>(buf->entry<JitEntry>());
   fn->jitState = JitState::COMPILED;
+  gStats.compiled++;
+  gStats.bytecodeBytes += fn->chunk.code.size();
+  gStats.nativeBytes += buf->size();
   if (logJit) {
     fprintf(stderr, "[jit] compiled %s (%zu bytecode -> %zu native bytes)\n",
-            fn->name ? fn->name->chars.c_str() : "<script>",
-            fn->chunk.code.size(), buf->size());
+            name, fn->chunk.code.size(), buf->size());
   }
+  if (getenv("EMBER_JIT_DUMP") != nullptr) dumpCode(name, *buf);
   codeRegistry().push_back(std::move(buf));
+}
+
+void printStats() {
+  if (gStats.compiled == 0 && gStats.rejected == 0) return;
+  fprintf(stderr,
+          "[jit] stats: %d compiled, %d rejected, %zu bytecode bytes -> "
+          "%zu native bytes (%.1fx expansion)\n",
+          gStats.compiled, gStats.rejected, gStats.bytecodeBytes,
+          gStats.nativeBytes,
+          gStats.bytecodeBytes
+              ? static_cast<double>(gStats.nativeBytes) / gStats.bytecodeBytes
+              : 0.0);
 }
 
 int execute(VM* vm, ObjFunction* fn) {
@@ -552,6 +587,7 @@ bool enabled() { return false; }
 uint32_t threshold() { return kHotCallThreshold; }
 void compile(ObjFunction* fn) { fn->jitState = JitState::UNSUPPORTED; }
 int execute(VM*, ObjFunction*) { return 0; }
+void printStats() {}
 }  // namespace jit
 
 #endif
