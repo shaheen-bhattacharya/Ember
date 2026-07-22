@@ -163,6 +163,7 @@ VM::VM() {
 
 VM::~VM() {
   if (getenv("EMBER_PROFILE") != nullptr) printProfile();
+  if (getenv("EMBER_LOG_JIT") != nullptr) jit::printStats();
   gHeap.vm = nullptr;
   gHeap.gcEnabled = false;
   gHeap.freeObjects();

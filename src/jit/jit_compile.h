@@ -23,4 +23,8 @@ void compile(ObjFunction* fn);
 // success (frame popped, result pushed), 0 after a runtime error.
 int execute(VM* vm, ObjFunction* fn);
 
+// Prints compilation totals to stderr (functions compiled/rejected, bytecode
+// vs native bytes). Called at VM teardown when EMBER_LOG_JIT is set.
+void printStats();
+
 }  // namespace jit
