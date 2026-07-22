@@ -345,6 +345,43 @@ class TemplateCompiler {
     a_.bind(done);
   }
 
+  // not: replace top of stack with a boolean, no helper (infallible).
+  void emitNot() {
+    a64::Label isTrue, isFalse, store;
+    a_.ldrX(0, kTopAddr, 0);
+    a_.ldurbW(1, 0, -16);
+    a_.cbzW(1, isTrue);   // nil -> !nil is true
+    a_.cmpImmW(1, 1);     // BOOL?
+    a_.bCond(a64::NE, isFalse);  // any other type is truthy -> false
+    a_.ldurbW(3, 0, -8);
+    a_.cbzW(3, isTrue);   // boolean false -> true
+    a_.bind(isFalse);
+    a_.movz(3, 0);
+    a_.b(store);
+    a_.bind(isTrue);
+    a_.movz(3, 1);
+    a_.bind(store);
+    a_.movz(2, 1);        // BOOL tag
+    a_.sturX(2, 0, -16);
+    a_.sturX(3, 0, -8);
+  }
+
+  // negate: in-place fneg on the number fast path.
+  void emitNegate(int bcOffset) {
+    a64::Label slow, done;
+    a_.ldrX(0, kTopAddr, 0);
+    a_.ldurbW(1, 0, -16);
+    a_.cmpImmW(1, kTagNumber);
+    a_.bCond(a64::NE, slow);
+    a_.ldurD(0, 0, -8);
+    a_.fnegD(0, 0);
+    a_.sturD(0, 0, -8);
+    a_.b(done);
+    a_.bind(slow);
+    emitHelper2Checked(reinterpret_cast<void*>(ember_jit_negate), bcOffset);
+    a_.bind(done);
+  }
+
   // Returns the offset of the next opcode, or 0 if this one is unsupported.
   size_t emitOp(int offset) {
     const std::vector<uint8_t>& code = chunk_.code;
@@ -414,10 +451,10 @@ class TemplateCompiler {
         emitHelper1(reinterpret_cast<void*>(ember_jit_equal));
         return offset + 1;
       case OP_NOT:
-        emitHelper1(reinterpret_cast<void*>(ember_jit_not));
+        emitNot();
         return offset + 1;
       case OP_NEGATE:
-        emitHelper2Checked(reinterpret_cast<void*>(ember_jit_negate), offset);
+        emitNegate(offset);
         return offset + 1;
       case OP_PRINT:
         emitHelper1(reinterpret_cast<void*>(ember_jit_print));
