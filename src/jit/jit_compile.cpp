@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "../chunk.h"
@@ -63,6 +64,7 @@ class TemplateCompiler {
   a64::Assembler a_;
   a64::Label errorExit_;
   std::unordered_map<int, a64::Label> targets_;  // bytecode offset -> label
+  std::unordered_set<int> fused_;  // offsets of fusable compare+branch triples
 
   int read16(int offset) const {
     return (chunk_.code[offset] << 8) | chunk_.code[offset + 1];
@@ -115,21 +117,70 @@ class TemplateCompiler {
     }
   }
 
-  // Validates every opcode is supported and collects branch targets.
+  int fusionTarget(int off) const { return off + 4 + read16(off + 2); }
+
+  // A fusable triple: [LESS/GREATER][JUMP_IF_FALSE t][POP] where t is itself
+  // a POP (the exit's condition pop). Fused code never materializes the
+  // boolean, so no other jump may land inside the triple or on t.
+  bool isFusionCandidate(int off) const {
+    const std::vector<uint8_t>& code = chunk_.code;
+    if (static_cast<size_t>(off) + 4 >= code.size()) return false;
+    uint8_t op = code[off];
+    if (op != OP_LESS && op != OP_GREATER) return false;
+    if (code[off + 1] != OP_JUMP_IF_FALSE || code[off + 4] != OP_POP) {
+      return false;
+    }
+    int target = fusionTarget(off);
+    return static_cast<size_t>(target) < code.size() &&
+           code[target] == OP_POP;
+  }
+
+  // Validates every opcode is supported, collects branch targets, and finds
+  // compare+branch triples that fuse into one native fcmp+b.cond.
   bool prescan() {
     const std::vector<uint8_t>& code = chunk_.code;
+    // Pass 1: validate, gather fusion candidates, and register targets of
+    // every jump EXCEPT a candidate's own JUMP_IF_FALSE (a fused triple
+    // branches to target+1 instead; unfused ones get registered below).
     for (size_t offset = 0; offset < code.size();) {
+      int off = static_cast<int>(offset);
       uint8_t op = code[offset];
-      int length = supportedLength(static_cast<int>(offset));
+      int length = supportedLength(off);
       if (length < 0) return false;
-      int next = static_cast<int>(offset) + length;
+      if (isFusionCandidate(off)) {
+        fused_.insert(off);
+        offset += 5;
+        continue;
+      }
+      int next = off + length;
       if (op == OP_JUMP || op == OP_JUMP_IF_FALSE) {
-        targets_[next + read16(static_cast<int>(offset) + 1)];
+        targets_[next + read16(off + 1)];
       } else if (op == OP_LOOP) {
-        targets_[next - read16(static_cast<int>(offset) + 1)];
+        targets_[next - read16(off + 1)];
       }
       offset = static_cast<size_t>(next);
     }
+
+    // Pass 2: un-fuse any candidate whose interior or target is jumped to.
+    // Un-fusing registers its normal target, which can invalidate another
+    // candidate, so iterate to a fixpoint.
+    bool changed = true;
+    while (changed) {
+      changed = false;
+      for (auto it = fused_.begin(); it != fused_.end();) {
+        int off = *it;
+        int target = fusionTarget(off);
+        if (targets_.count(off + 1) != 0 || targets_.count(off + 4) != 0 ||
+            targets_.count(target) != 0) {
+          targets_[target];  // now branches like a normal JUMP_IF_FALSE
+          it = fused_.erase(it);
+          changed = true;
+        } else {
+          ++it;
+        }
+      }
+    }
+    for (int off : fused_) targets_[fusionTarget(off) + 1];
     return true;
   }
 
@@ -234,6 +285,30 @@ class TemplateCompiler {
     a_.bind(done);
   }
 
+  // [CMP][JUMP_IF_FALSE][POP] as one unit: no boolean is materialized. Both
+  // arms land past the target's condition-pop (prescan registered target+1).
+  void emitFusedCompareBranch(uint8_t op, int offset) {
+    int target = offset + 4 + read16(offset + 2);
+    a64::Label& taken = targets_[target + 1];
+    a64::Label slow, fall;
+    emitNumberGuards(slow);
+    a_.fcmpD(0, 1);
+    a_.subImm(0, 0, 32);  // pop both operands
+    a_.strX(0, kTopAddr, 0);
+    // Branch when the comparison is false; PL/LE also cover unordered (NaN
+    // compares false), matching interpreter truthiness.
+    a_.bCond(op == OP_LESS ? a64::PL : a64::LE, taken);
+    a_.b(fall);
+    a_.bind(slow);
+    emitHelper3Checked(reinterpret_cast<void*>(ember_jit_binary), op, offset);
+    // The helper pushed the boolean; pop it and branch on the payload.
+    a_.ldrX(0, kTopAddr, 0);
+    a_.ldurbW(2, 0, -8);
+    emitShrinkOne();
+    a_.cbzW(2, taken);
+    a_.bind(fall);
+  }
+
   void emitComparison(uint8_t op, int bcOffset) {
     a64::Label slow, done;
     emitNumberGuards(slow);
@@ -310,6 +385,10 @@ class TemplateCompiler {
         return offset + 1;
       case OP_GREATER:
       case OP_LESS:
+        if (fused_.count(offset) != 0) {
+          emitFusedCompareBranch(op, offset);
+          return offset + 5;
+        }
         emitComparison(op, offset);
         return offset + 1;
       case OP_EQUAL:
