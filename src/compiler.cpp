@@ -185,17 +185,22 @@ class Compiler {
     emitByte(OP_RETURN);
   }
 
-  uint8_t makeConstant(const Value& value) {
+  int findOrAddConstant(const Value& value, int maxIndex) {
     // Reuse an existing pool entry: repeated literals and names would
-    // otherwise exhaust the 256-slot pool. Strings are interned, so
-    // valuesEqual's pointer comparison deduplicates them too.
+    // otherwise exhaust the pool. Strings are interned, so valuesEqual's
+    // pointer comparison deduplicates them too. Only hits within maxIndex
+    // count: single-byte-operand opcodes can't reach further entries.
     Chunk& chunk = currentChunk();
-    for (int i = 0; i < static_cast<int>(chunk.constants.size()); i++) {
-      if (valuesEqual(chunk.constants[i], value)) {
-        return static_cast<uint8_t>(i);
-      }
+    int limit = static_cast<int>(chunk.constants.size());
+    for (int i = 0; i < limit && i <= maxIndex; i++) {
+      if (valuesEqual(chunk.constants[i], value)) return i;
     }
-    int constant = currentChunk().addConstant(value);
+    return chunk.addConstant(value);
+  }
+
+  // For opcodes with a one-byte constant operand (names, functions).
+  uint8_t makeConstant(const Value& value) {
+    int constant = findOrAddConstant(value, UINT8_MAX);
     if (constant > UINT8_MAX) {
       error("Too many constants in one chunk.");
       return 0;
@@ -203,8 +208,20 @@ class Compiler {
     return static_cast<uint8_t>(constant);
   }
 
+  // Literals get the wide encoding when the pool grows past 256.
   void emitConstant(const Value& value) {
-    emitBytes(OP_CONSTANT, makeConstant(value));
+    int constant = findOrAddConstant(value, UINT16_MAX);
+    if (constant > UINT16_MAX) {
+      error("Too many constants in one chunk.");
+      return;
+    }
+    if (constant <= UINT8_MAX) {
+      emitBytes(OP_CONSTANT, static_cast<uint8_t>(constant));
+    } else {
+      emitByte(OP_CONSTANT_LONG);
+      emitByte((constant >> 8) & 0xff);
+      emitByte(constant & 0xff);
+    }
   }
 
   // ---- compiler state ----

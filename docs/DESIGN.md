@@ -140,7 +140,9 @@ bottleneck there — as expected).
 ## Known limitations (deliberate, roadmap items)
 
 - No classes/objects beyond strings, functions, and closures.
-- Constant pool capped at 256 entries per chunk (no `OP_CONSTANT_LONG` yet).
+- Literal constant pools grow to 65,536 entries (`OP_CONSTANT_LONG`); opcodes
+  with one-byte constant operands (global names, function references) still
+  cap at 256 per chunk.
 - The value stack (65,536 slots) is guarded at call boundaries (each call
   reserves 256 slots of headroom) but not per push, so a single expression
   with pathological temporary depth inside one frame can still overflow.

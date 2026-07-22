@@ -26,6 +26,7 @@ int instructionLength(const Chunk& chunk, int offset) {
     case OP_JUMP:
     case OP_JUMP_IF_FALSE:
     case OP_LOOP:
+    case OP_CONSTANT_LONG:
       return 3;
     case OP_CLOSURE: {
       ObjFunction* fn = asFunction(chunk.constants[chunk.code[offset + 1]]);

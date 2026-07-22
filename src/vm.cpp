@@ -392,6 +392,11 @@ InterpretResult VM::run(int stopDepth) {
       case OP_CONSTANT:
         push(READ_CONSTANT());
         break;
+      case OP_CONSTANT_LONG: {
+        uint16_t index = READ_SHORT();
+        push(frame->closure->function->chunk.constants[index]);
+        break;
+      }
       case OP_NIL:
         push(Value::nil());
         break;
