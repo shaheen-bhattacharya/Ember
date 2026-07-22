@@ -20,6 +20,8 @@ jobs:
         run: EMBER_JIT_THRESHOLD=1 ./tests/run_tests.sh
       - name: Test interpreter only
         run: EMBER_JIT=0 ./tests/run_tests.sh
+      - name: Test under GC stress, JIT forced hot
+        run: EMBER_GC_STRESS=1 EMBER_JIT_THRESHOLD=1 ./tests/run_tests.sh
 
   asan:
     runs-on: macos-latest
@@ -38,3 +40,14 @@ jobs:
         run: make
       - name: Test
         run: make test
+
+  bench:
+    # Informational: shared runners are noisy, so this reports numbers in the
+    # log rather than gating the build.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: make
+      - name: Benchmarks (interpreter vs JIT)
+        run: make bench
