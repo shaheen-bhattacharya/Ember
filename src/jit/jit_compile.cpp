@@ -90,6 +90,7 @@ class TemplateCompiler {
       case OP_JUMP:
       case OP_JUMP_IF_FALSE:
       case OP_LOOP:
+      case OP_CONSTANT_LONG:
         return 3;
       case OP_NIL:
       case OP_TRUE:
@@ -261,6 +262,13 @@ class TemplateCompiler {
         a_.ldpX(2, 3, 1, 0);
         emitPushPair();
         return offset + 2;
+      }
+      case OP_CONSTANT_LONG: {
+        const Value* constant = &chunk_.constants[read16(offset + 1)];
+        a_.movImm64(1, reinterpret_cast<uint64_t>(constant));
+        a_.ldpX(2, 3, 1, 0);
+        emitPushPair();
+        return offset + 3;
       }
       case OP_NIL:
         a_.movz(2, 0);

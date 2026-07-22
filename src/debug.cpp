@@ -42,6 +42,13 @@ int disassembleInstruction(const Chunk& chunk, int offset) {
   uint8_t instruction = chunk.code[offset];
   switch (instruction) {
     case OP_CONSTANT: return constantInstruction("OP_CONSTANT", chunk, offset);
+    case OP_CONSTANT_LONG: {
+      uint16_t constant = static_cast<uint16_t>(
+          (chunk.code[offset + 1] << 8) | chunk.code[offset + 2]);
+      printf("%-16s %4d '%s'\n", "OP_CONSTANT_LONG", constant,
+             valueToString(chunk.constants[constant]).c_str());
+      return offset + 3;
+    }
     case OP_NIL: return simpleInstruction("OP_NIL", offset);
     case OP_TRUE: return simpleInstruction("OP_TRUE", offset);
     case OP_FALSE: return simpleInstruction("OP_FALSE", offset);

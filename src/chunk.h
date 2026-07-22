@@ -37,6 +37,7 @@ enum OpCode : uint8_t {
   OP_CLOSURE,        // operands: fn constant index, then (isLocal, index) per upvalue
   OP_CLOSE_UPVALUE,  // hoist the captured top-of-stack local into the heap
   OP_RETURN,
+  OP_CONSTANT_LONG,  // operand: 16-bit constant index, for pools past 256
 };
 
 // A chunk of bytecode plus its constant pool and line info (parallel to code,
