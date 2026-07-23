@@ -4,7 +4,7 @@
 
 A small dynamically-typed language and its runtime, built from scratch in C++17 — the first tier of a planned multi-tier JIT-compiled virtual machine (the same architecture as V8, JavaScriptCore, and the JVM).
 
-**Current status: Tier 0 + Tier 1 baseline JIT.** Source is lexed, parsed (single-pass Pratt parser, no AST), compiled to a compact stack-based bytecode, and executed by a bytecode interpreter with a precise mark-sweep garbage collector and interned strings. On AArch64 (Apple Silicon), functions that cross the hotness threshold are template-compiled to native machine code — inline unboxed float fast paths, fused compare+branch loop conditions, runtime helpers for slow paths — giving **4.6× on tight loops and 2.3× on call-heavy recursion** over the interpreter. Closures compile too.
+**Current status: Tier 0 + Tier 1 baseline JIT.** Source is lexed, parsed (single-pass Pratt parser, no AST), compiled to a compact stack-based bytecode, and executed by a computed-goto interpreter with a precise mark-sweep garbage collector and interned strings. On AArch64 (Apple Silicon), functions that cross the hotness threshold are template-compiled to native machine code — inline unboxed float fast paths, fused compare+branch loop conditions, inline caches for globals, runtime helpers for slow paths. Against the original switch-dispatch interpreter, the full stack is now **5.6× faster on tight loops and 3.7× on call-heavy recursion** (3.9×/2.8× against the current, faster interpreter). Closures compile too.
 
 ## The language
 
@@ -19,7 +19,7 @@ print "fib(30) = " + str(fib(30));
 print "took " + str(clock() - start) + "s";
 ```
 
-Dynamic typing over four value kinds (`nil`, booleans, 64-bit float numbers, heap objects), first-class functions and closures (with shared mutable captures, Lua-style upvalues), lexically-scoped locals, `if`/`else`, `while`, `for` with `break`/`continue`, short-circuiting `and`/`or`, compound assignment (`+=`, `-=`), numeric literals with underscore separators (`1_000_000`), strings with `+` concatenation and lexicographic `<`/`>` comparison, and native functions (`clock`, `str`, `sqrt`, `abs`, `floor`, `ceil`, `round`, `min`, `max`, `len`, `substr`). Runnable programs live in [examples/](examples/).
+Dynamic typing over four value kinds (`nil`, booleans, 64-bit float numbers, heap objects), first-class functions and closures (with shared mutable captures, Lua-style upvalues), lexically-scoped locals, `if`/`else`, `while`, `for` with `break`/`continue`, short-circuiting `and`/`or`, compound assignment (`+=`, `-=`), numeric literals with underscore separators (`1_000_000`), strings with `+` concatenation, lexicographic `<`/`>` comparison, and `s[i]` indexing, arrays (`[1, 2, 3]` literals, `a[i]` get/set, reference semantics), and native functions (`clock`, `str`, `sqrt`, `abs`, `floor`, `ceil`, `round`, `min`, `max`, `len`, `substr`, `push`, `pop`). Snippets live in [examples/](examples/); complete programs (Game of Life, quicksort) in [samples/](samples/).
 
 ## Build and run
 
@@ -73,7 +73,8 @@ The point of this project is the full tiered-execution architecture:
 - [x] **Tier 0 — bytecode interpreter** (this repo today)
 - [x] Closures with upvalues (shared mutable capture, closed on scope exit)
 - [x] Type feedback: hotness counters, per-site operand type recording, monomorphic call-site caches (`EMBER_PROFILE=1`)
-- [x] **Tier 1 — baseline JIT**: template-compile bytecode to AArch64, `mmap(MAP_JIT)` code pages, interpreter↔JIT calling convention, closures, compare+branch fusion
+- [x] **Tier 1 — baseline JIT**: template-compile bytecode to AArch64, `mmap(MAP_JIT)` code pages, interpreter↔JIT calling convention, closures, compare+branch fusion, global inline caches
+- [ ] Array opcodes in the JIT (array-using functions currently stay interpreted)
 - [ ] Classes if the fancy strikes
 - [ ] **Tier 2 — optimizing JIT**: SSA IR, type specialization from recorded feedback, inlining, DCE, linear-scan register allocation
 - [ ] **Deoptimization**: bail from speculative JIT code back to the interpreter, reconstructing frames

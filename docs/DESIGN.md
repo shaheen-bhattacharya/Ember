@@ -8,6 +8,19 @@ disassembly maps 1:1 to source structure. The cost is more dispatch per useful
 operation than a register machine (Lua-style). That cost is deliberate — it
 makes the tier-1 baseline JIT speedup measurable and honest.
 
+**Computed-goto dispatch.** Where the compiler supports labels-as-values,
+every opcode ends with its own indirect branch instead of funneling through
+one switch: the branch predictor learns per-opcode-pair patterns. Worth ~30%
+on dispatch-bound loops (0.48s → 0.33s) and 25% on call-heavy recursion; the
+bodies are written once and a `static_assert` pins dispatch-table order to
+the opcode enum.
+
+**Global inline caches (tier 1).** Each compiled global-access site caches
+the resolved `unordered_map` node address after its first lookup and then
+loads/stores it directly. Sound because node addresses survive rehashes and
+globals can't be deleted. Recursion resolves the callee through a global, so
+this took fib from 0.061s to 0.036s.
+
 **Single-pass compiler, no AST.** The Pratt parser emits bytecode as it
 parses. This is the fastest possible compile pipeline (one token of
 lookahead, no tree allocation) and is exactly what a baseline JIT tier wants:
