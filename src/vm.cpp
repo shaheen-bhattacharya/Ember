@@ -45,8 +45,31 @@ static Value absNative(int argCount, Value* args) {
 }
 
 static Value lenNative(int argCount, Value* args) {
-  if (argCount != 1 || !args[0].isString()) return Value::nil();
-  return Value::number(static_cast<double>(asString(args[0])->chars.size()));
+  if (argCount != 1) return Value::nil();
+  if (args[0].isString()) {
+    return Value::number(
+        static_cast<double>(asString(args[0])->chars.size()));
+  }
+  if (args[0].isArray()) {
+    return Value::number(static_cast<double>(asArray(args[0])->items.size()));
+  }
+  return Value::nil();
+}
+
+static Value pushNative(int argCount, Value* args) {
+  if (argCount != 2 || !args[0].isArray()) return Value::nil();
+  ObjArray* array = asArray(args[0]);
+  array->items.push_back(args[1]);
+  return Value::number(static_cast<double>(array->items.size()));
+}
+
+static Value popNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isArray()) return Value::nil();
+  ObjArray* array = asArray(args[0]);
+  if (array->items.empty()) return Value::nil();
+  Value last = array->items.back();
+  array->items.pop_back();
+  return last;
 }
 
 static Value floorNative(int argCount, Value* args) {
@@ -164,6 +187,8 @@ VM::VM() {
   defineNative("round", roundNative);
   defineNative("len", lenNative);
   defineNative("substr", substrNative);
+  defineNative("push", pushNative);
+  defineNative("pop", popNative);
   defineNative("min", minNative);
   defineNative("max", maxNative);
 }
@@ -426,10 +451,11 @@ InterpretResult VM::run(int stopDepth) {
       &&lbl_OP_NEGATE,        &&lbl_OP_PRINT,         &&lbl_OP_JUMP,
       &&lbl_OP_JUMP_IF_FALSE, &&lbl_OP_LOOP,          &&lbl_OP_CALL,
       &&lbl_OP_CLOSURE,       &&lbl_OP_CLOSE_UPVALUE, &&lbl_OP_RETURN,
-      &&lbl_OP_CONSTANT_LONG,
+      &&lbl_OP_CONSTANT_LONG, &&lbl_OP_ARRAY,         &&lbl_OP_INDEX_GET,
+      &&lbl_OP_INDEX_SET,
   };
   static_assert(sizeof(kDispatchTable) / sizeof(kDispatchTable[0]) ==
-                    OP_CONSTANT_LONG + 1,
+                    OP_INDEX_SET + 1,
                 "dispatch table must cover every opcode");
   VM_NEXT();  // dispatch the first instruction
 #else
@@ -629,6 +655,75 @@ InterpretResult VM::run(int stopDepth) {
             closure->upvalues[i] = frame->closure->upvalues[index];
           }
         }
+      }
+        VM_NEXT();
+      VM_CASE(OP_ARRAY): {
+        uint8_t count = READ_BYTE();
+        // Elements stay rooted on the stack across the allocation.
+        ObjArray* array = gHeap.allocate<ObjArray>();
+        array->items.assign(stackTop_ - count, stackTop_);
+        stackTop_ -= count;
+        push(Value::object(array));
+      }
+        VM_NEXT();
+      VM_CASE(OP_INDEX_GET): {
+        if (!peek(0).isNumber()) {
+          runtimeError("Index must be a number.");
+          return InterpretResult::RUNTIME_ERROR;
+        }
+        double indexNum = peek(0).as.number;
+        size_t index = static_cast<size_t>(indexNum);
+        if (peek(1).isArray()) {
+          ObjArray* array = asArray(peek(1));
+          if (indexNum < 0 || static_cast<double>(index) != indexNum ||
+              index >= array->items.size()) {
+            runtimeError("Array index out of range.");
+            return InterpretResult::RUNTIME_ERROR;
+          }
+          pop();
+          pop();
+          push(array->items[index]);
+        } else if (peek(1).isString()) {
+          ObjString* string = asString(peek(1));
+          if (indexNum < 0 || static_cast<double>(index) != indexNum ||
+              index >= string->chars.size()) {
+            runtimeError("String index out of range.");
+            return InterpretResult::RUNTIME_ERROR;
+          }
+          ObjString* ch = copyString(std::string(1, string->chars[index]));
+          pop();
+          pop();
+          push(Value::object(ch));
+        } else {
+          runtimeError("Can only index arrays and strings; got a %s.",
+                       typeName(peek(1)));
+          return InterpretResult::RUNTIME_ERROR;
+        }
+      }
+        VM_NEXT();
+      VM_CASE(OP_INDEX_SET): {
+        if (!peek(2).isArray()) {
+          runtimeError("Can only assign into arrays; got a %s.",
+                       typeName(peek(2)));
+          return InterpretResult::RUNTIME_ERROR;
+        }
+        if (!peek(1).isNumber()) {
+          runtimeError("Index must be a number.");
+          return InterpretResult::RUNTIME_ERROR;
+        }
+        ObjArray* array = asArray(peek(2));
+        double indexNum = peek(1).as.number;
+        size_t index = static_cast<size_t>(indexNum);
+        if (indexNum < 0 || static_cast<double>(index) != indexNum ||
+            index >= array->items.size()) {
+          runtimeError("Array index out of range.");
+          return InterpretResult::RUNTIME_ERROR;
+        }
+        Value value = pop();
+        pop();  // index
+        pop();  // array
+        array->items[index] = value;
+        push(value);  // assignment is an expression
       }
         VM_NEXT();
       VM_CASE(OP_CLOSE_UPVALUE):

@@ -75,6 +75,9 @@ int disassembleInstruction(const Chunk& chunk, int offset) {
     case OP_JUMP_IF_FALSE: return jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
     case OP_LOOP: return jumpInstruction("OP_LOOP", -1, chunk, offset);
     case OP_CALL: return byteInstruction("OP_CALL", chunk, offset);
+    case OP_ARRAY: return byteInstruction("OP_ARRAY", chunk, offset);
+    case OP_INDEX_GET: return simpleInstruction("OP_INDEX_GET", offset);
+    case OP_INDEX_SET: return simpleInstruction("OP_INDEX_SET", offset);
     case OP_CLOSURE: {
       int off = offset + 1;
       uint8_t constant = chunk.code[off++];
