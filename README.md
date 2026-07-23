@@ -4,7 +4,7 @@
 
 A small dynamically-typed language and its runtime, built from scratch in C++17 — the first tier of a planned multi-tier JIT-compiled virtual machine (the same architecture as V8, JavaScriptCore, and the JVM).
 
-**Current status: Tier 0 + Tier 1 baseline JIT.** Source is lexed, parsed (single-pass Pratt parser, no AST), compiled to a compact stack-based bytecode, and executed by a bytecode interpreter with a precise mark-sweep garbage collector and interned strings. On AArch64 (Apple Silicon), functions that cross the hotness threshold are template-compiled to native machine code — inline unboxed float fast paths, runtime helpers for slow paths — giving **3.9× on tight loops and 2.2× on call-heavy recursion** over the interpreter.
+**Current status: Tier 0 + Tier 1 baseline JIT.** Source is lexed, parsed (single-pass Pratt parser, no AST), compiled to a compact stack-based bytecode, and executed by a bytecode interpreter with a precise mark-sweep garbage collector and interned strings. On AArch64 (Apple Silicon), functions that cross the hotness threshold are template-compiled to native machine code — inline unboxed float fast paths, fused compare+branch loop conditions, runtime helpers for slow paths — giving **4.6× on tight loops and 2.3× on call-heavy recursion** over the interpreter. Closures compile too.
 
 ## The language
 
@@ -38,7 +38,9 @@ EMBER_PROFILE=1 ./ember script.em # dump hotness + type feedback at exit
 EMBER_LOG_HOT=1 ./ember script.em # log when a function crosses the hot threshold
 EMBER_JIT=0 ./ember script.em     # disable the tier-1 JIT (AArch64 only)
 EMBER_JIT_THRESHOLD=1 ...         # tier up on the first call (default 1000)
-EMBER_LOG_JIT=1 ./ember script.em # log JIT compilations and fallbacks
+EMBER_LOG_JIT=1 ./ember script.em # log JIT compilations, fallbacks, stats
+EMBER_JIT_DUMP=1 ./ember ...      # hex-dump compiled code (llvm-mc format)
+EMBER_GC_STRESS=1 ./ember ...     # collect on every allocation (bug hunting)
 ./ember --jit-selftest            # verify code emission on this machine
 ```
 
@@ -71,7 +73,7 @@ The point of this project is the full tiered-execution architecture:
 - [x] **Tier 0 — bytecode interpreter** (this repo today)
 - [x] Closures with upvalues (shared mutable capture, closed on scope exit)
 - [x] Type feedback: hotness counters, per-site operand type recording, monomorphic call-site caches (`EMBER_PROFILE=1`)
-- [x] **Tier 1 — baseline JIT**: template-compile bytecode to AArch64, `mmap(MAP_JIT)` code pages, interpreter↔JIT calling convention (closures still interpreter-only)
+- [x] **Tier 1 — baseline JIT**: template-compile bytecode to AArch64, `mmap(MAP_JIT)` code pages, interpreter↔JIT calling convention, closures, compare+branch fusion
 - [ ] Classes if the fancy strikes
 - [ ] **Tier 2 — optimizing JIT**: SSA IR, type specialization from recorded feedback, inlining, DCE, linear-scan register allocation
 - [ ] **Deoptimization**: bail from speculative JIT code back to the interpreter, reconstructing frames
