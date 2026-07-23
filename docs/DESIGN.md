@@ -129,12 +129,26 @@ compiled.
 process-lifetime registry; functions are GC'd, code is not (code GC is a
 non-goal for the baseline).
 
-**What doesn't compile.** Functions containing `OP_CLOSURE`,
-`OP_GET/SET_UPVALUE`, or `OP_CLOSE_UPVALUE` are marked UNSUPPORTED and stay
-interpreted forever — upvalue semantics interact with the open-upvalue list
-and are tier-2 work. Top-level script code never tiers (it runs once).
-Measured on Apple Silicon: tight numeric loops 3.9×, call-heavy recursion
-2.2×, allocation-bound workloads ~1× (the GC, not dispatch, is the
+**Closures.** Closure creation, upvalue reads/writes, and upvalue closing all
+lower to helpers (the closure is rooted on the stack before capture, since
+capture allocates), and return closes the frame's open upvalues — so every
+opcode is now compilable and no function is interpreter-bound by shape.
+Upvalue access stays helper-bound; inlining it is tier-2 work.
+
+**Compare+branch fusion.** A `LESS/GREATER; JUMP_IF_FALSE; POP` triple whose
+branch target is the exit's condition-pop compiles to one `fcmp` plus an
+inverted `b.cond` — no boolean is materialized. A fixpoint pass un-fuses any
+triple that another jump lands inside of, and the inverted conditions (PL/LE)
+include the unordered case so NaN comparisons stay falsey.
+
+**Diagnostics.** `EMBER_LOG_JIT=1` logs each compilation and prints totals at
+exit; `EMBER_JIT_DUMP=1` hex-dumps emitted code for `llvm-mc --disassemble`;
+`EMBER_GC_STRESS=1` collects on every allocation, which is the harshest test
+of the JIT's rooting discipline (CI runs it with the JIT forced hot).
+
+Top-level script code never tiers (it runs once). Measured on Apple Silicon:
+tight numeric loops 4.6×, call-heavy recursion 2.3×, closure-heavy calls
+1.2×, allocation-bound workloads ~1× (the GC, not dispatch, is the
 bottleneck there — as expected).
 
 ## Known limitations (deliberate, roadmap items)
