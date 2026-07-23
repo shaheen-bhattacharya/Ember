@@ -9,6 +9,7 @@
 
 #if EMBER_JIT_SUPPORTED
 
+#include <deque>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -24,6 +25,15 @@ namespace {
 std::vector<std::unique_ptr<CodeBuffer>>& codeRegistry() {
   static std::vector<std::unique_ptr<CodeBuffer>> registry;
   return registry;
+}
+
+// Inline-cache cells for global accesses, one per compiled site. A deque
+// keeps element addresses stable; cells live as long as the code that
+// embeds their addresses (process lifetime).
+Value** newGlobalCacheCell() {
+  static std::deque<Value*> cells;
+  cells.push_back(nullptr);
+  return &cells.back();
 }
 
 struct JitStats {
@@ -474,13 +484,34 @@ class TemplateCompiler {
           a_.movReg(0, kVm);
           a_.movImm64(1, reinterpret_cast<uint64_t>(name));
           emitCallHelper(reinterpret_cast<void*>(ember_jit_define_global));
-        } else {
-          emitHelper3Checked(
-              op == OP_GET_GLOBAL
-                  ? reinterpret_cast<void*>(ember_jit_get_global)
-                  : reinterpret_cast<void*>(ember_jit_set_global),
-              reinterpret_cast<uint64_t>(name), offset);
+          return offset + 2;
         }
+        // Inline cache: after the first resolution the site reads or writes
+        // the map slot directly, skipping the hash lookup.
+        Value** cell = newGlobalCacheCell();
+        a64::Label slow, done;
+        a_.movImm64(1, reinterpret_cast<uint64_t>(cell));
+        a_.ldrX(4, 1, 0);
+        a_.cbzX(4, slow);
+        if (op == OP_GET_GLOBAL) {
+          a_.ldpX(2, 3, 4, 0);
+          emitPushPair();
+        } else {
+          a_.ldrX(0, kTopAddr, 0);
+          a_.ldpX(2, 3, 0, -16);  // assignment leaves the value on the stack
+          a_.stpX(2, 3, 4, 0);
+        }
+        a_.b(done);
+        a_.bind(slow);
+        a_.movReg(0, kVm);
+        a_.movImm64(1, reinterpret_cast<uint64_t>(name));
+        a_.movImm64(2, reinterpret_cast<uint64_t>(cell));
+        a_.movImm64(3, static_cast<uint64_t>(offset));
+        emitCallHelper(op == OP_GET_GLOBAL
+                           ? reinterpret_cast<void*>(ember_jit_get_global_ic)
+                           : reinterpret_cast<void*>(ember_jit_set_global_ic));
+        a_.cbzW(0, errorExit_);
+        a_.bind(done);
         return offset + 2;
       }
       case OP_CLOSURE: {
