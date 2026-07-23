@@ -122,6 +122,35 @@ int JitRuntime::setGlobal(VM* vm, ObjString* name, int bcOffset) {
   return 1;
 }
 
+// Inline-cache misses: resolve the global and remember its map slot.
+// unordered_map nodes are address-stable across inserts and rehashes, and
+// Ember has no way to delete a global, so a filled cache never goes stale.
+int JitRuntime::getGlobalIC(VM* vm, ObjString* name, Value** cell,
+                            int bcOffset) {
+  auto it = vm->globals_.find(name);
+  if (it == vm->globals_.end()) {
+    syncIp(vm, bcOffset);
+    vm->runtimeError("Undefined variable '%s'.", name->chars.c_str());
+    return 0;
+  }
+  *cell = &it->second;
+  push(vm, it->second);
+  return 1;
+}
+
+int JitRuntime::setGlobalIC(VM* vm, ObjString* name, Value** cell,
+                            int bcOffset) {
+  auto it = vm->globals_.find(name);
+  if (it == vm->globals_.end()) {
+    syncIp(vm, bcOffset);
+    vm->runtimeError("Undefined variable '%s'.", name->chars.c_str());
+    return 0;
+  }
+  *cell = &it->second;
+  it->second = peek(vm, 0);
+  return 1;
+}
+
 void JitRuntime::defineGlobal(VM* vm, ObjString* name) {
   vm->globals_[name] = peek(vm, 0);
   pop(vm);
@@ -219,6 +248,14 @@ int ember_jit_set_global(VM* vm, ObjString* name, int bcOffset) {
 }
 void ember_jit_define_global(VM* vm, ObjString* name) {
   JitRuntime::defineGlobal(vm, name);
+}
+int ember_jit_get_global_ic(VM* vm, ObjString* name, Value** cell,
+                            int bcOffset) {
+  return JitRuntime::getGlobalIC(vm, name, cell, bcOffset);
+}
+int ember_jit_set_global_ic(VM* vm, ObjString* name, Value** cell,
+                            int bcOffset) {
+  return JitRuntime::setGlobalIC(vm, name, cell, bcOffset);
 }
 void ember_jit_return(VM* vm) { JitRuntime::returnOp(vm); }
 int ember_jit_call(VM* vm, int argCount, int bcOffset) {

@@ -24,6 +24,8 @@ struct JitRuntime {
   static void print(VM* vm);
   static int getGlobal(VM* vm, ObjString* name, int bcOffset);
   static int setGlobal(VM* vm, ObjString* name, int bcOffset);
+  static int getGlobalIC(VM* vm, ObjString* name, Value** cell, int bcOffset);
+  static int setGlobalIC(VM* vm, ObjString* name, Value** cell, int bcOffset);
   static void defineGlobal(VM* vm, ObjString* name);
   static void returnOp(VM* vm);
   static int callOp(VM* vm, int argCount, int bcOffset);
@@ -46,6 +48,10 @@ void ember_jit_equal(VM* vm);
 void ember_jit_print(VM* vm);
 int ember_jit_get_global(VM* vm, ObjString* name, int bcOffset);
 int ember_jit_set_global(VM* vm, ObjString* name, int bcOffset);
+int ember_jit_get_global_ic(VM* vm, ObjString* name, Value** cell,
+                            int bcOffset);
+int ember_jit_set_global_ic(VM* vm, ObjString* name, Value** cell,
+                            int bcOffset);
 void ember_jit_define_global(VM* vm, ObjString* name);
 void ember_jit_return(VM* vm);
 int ember_jit_call(VM* vm, int argCount, int bcOffset);
