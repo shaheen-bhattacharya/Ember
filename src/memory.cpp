@@ -34,6 +34,11 @@ void Heap::markObject(Obj* object) {
     case ObjType::UPVALUE:
       markValue(static_cast<ObjUpvalue*>(object)->closed);
       break;
+    case ObjType::ARRAY:
+      for (const Value& item : static_cast<ObjArray*>(object)->items) {
+        markValue(item);
+      }
+      break;
   }
 }
 

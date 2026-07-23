@@ -33,12 +33,30 @@ const char* typeName(const Value& v) {
         case ObjType::CLOSURE: return "function";
         case ObjType::NATIVE: return "native function";
         case ObjType::UPVALUE: return "upvalue";
+        case ObjType::ARRAY: return "array";
       }
   }
   return "value";
 }
 
+static std::string valueToStringDepth(const Value& v, int depth);
+
+static std::string arrayToString(ObjArray* array, int depth) {
+  // Depth cap keeps self-referential arrays printable.
+  if (depth >= 3) return "[...]";
+  std::string out = "[";
+  for (size_t i = 0; i < array->items.size(); i++) {
+    if (i > 0) out += ", ";
+    out += valueToStringDepth(array->items[i], depth + 1);
+  }
+  return out + "]";
+}
+
 std::string valueToString(const Value& v) {
+  return valueToStringDepth(v, 0);
+}
+
+static std::string valueToStringDepth(const Value& v, int depth) {
   switch (v.type) {
     case ValueType::NIL:
       return "nil";
@@ -70,6 +88,8 @@ std::string valueToString(const Value& v) {
         }
         case ObjType::UPVALUE:
           return "<upvalue>";
+        case ObjType::ARRAY:
+          return arrayToString(asArray(v), depth);
       }
   }
   return "<unknown>";

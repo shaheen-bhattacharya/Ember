@@ -11,6 +11,7 @@ enum class ObjType : uint8_t {
   NATIVE,
   CLOSURE,
   UPVALUE,
+  ARRAY,
 };
 
 struct Obj {
@@ -68,6 +69,7 @@ struct Value {
   bool isString() const { return isObjType(ObjType::STRING); }
   bool isFunction() const { return isObjType(ObjType::FUNCTION); }
   bool isNative() const { return isObjType(ObjType::NATIVE); }
+  bool isArray() const { return isObjType(ObjType::ARRAY); }
 };
 
 bool valuesEqual(const Value& a, const Value& b);

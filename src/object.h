@@ -81,6 +81,11 @@ struct ObjClosure : Obj {
   }
 };
 
+struct ObjArray : Obj {
+  std::vector<Value> items;
+  ObjArray() { type = ObjType::ARRAY; }
+};
+
 using NativeFn = Value (*)(int argCount, Value* args);
 
 struct ObjNative : Obj {
@@ -92,6 +97,7 @@ inline ObjString* asString(const Value& v) { return static_cast<ObjString*>(v.as
 inline ObjFunction* asFunction(const Value& v) { return static_cast<ObjFunction*>(v.as.obj); }
 inline ObjNative* asNative(const Value& v) { return static_cast<ObjNative*>(v.as.obj); }
 inline ObjClosure* asClosure(const Value& v) { return static_cast<ObjClosure*>(v.as.obj); }
+inline ObjArray* asArray(const Value& v) { return static_cast<ObjArray*>(v.as.obj); }
 
 // Returns the interned string for `s`, allocating it on first sight.
 ObjString* copyString(const std::string& s);

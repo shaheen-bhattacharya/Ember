@@ -500,6 +500,30 @@ class Compiler {
     patchJump(endJump);
   }
 
+  void arrayLiteral(bool) {
+    int count = 0;
+    if (!check(TOKEN_RIGHT_BRACKET)) {
+      do {
+        expression();
+        if (count == 255) error("Can't have more than 255 array elements.");
+        count++;
+      } while (match(TOKEN_COMMA));
+    }
+    consume(TOKEN_RIGHT_BRACKET, "Expect ']' after array elements.");
+    emitBytes(OP_ARRAY, static_cast<uint8_t>(count));
+  }
+
+  void index(bool canAssign) {
+    expression();
+    consume(TOKEN_RIGHT_BRACKET, "Expect ']' after index.");
+    if (canAssign && match(TOKEN_EQUAL)) {
+      expression();
+      emitByte(OP_INDEX_SET);
+    } else {
+      emitByte(OP_INDEX_GET);
+    }
+  }
+
   uint8_t argumentList() {
     uint8_t argCount = 0;
     if (!check(TOKEN_RIGHT_PAREN)) {
@@ -523,6 +547,11 @@ class Compiler {
     switch (type) {
       case TOKEN_LEFT_PAREN: {
         static const ParseRule r = {&Compiler::grouping, &Compiler::call, PREC_CALL};
+        return r;
+      }
+      case TOKEN_LEFT_BRACKET: {
+        static const ParseRule r = {&Compiler::arrayLiteral, &Compiler::index,
+                                    PREC_CALL};
         return r;
       }
       case TOKEN_MINUS: {
