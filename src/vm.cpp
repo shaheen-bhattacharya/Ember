@@ -12,6 +12,13 @@
 #include "memory.h"
 #include "profile.h"
 
+// Computed-goto dispatch needs the GNU labels-as-values extension.
+#if defined(__GNUC__) || defined(__clang__)
+#define EMBER_COMPUTED_GOTO 1
+#else
+#define EMBER_COMPUTED_GOTO 0
+#endif
+
 // ---- native functions ----
 
 static Value clockNative(int, Value*) {
@@ -375,52 +382,93 @@ InterpretResult VM::run(int stopDepth) {
     push(op);                                             \
   } while (false)
 
-  for (;;) {
-    if (traceExecution_) {
-      fprintf(stderr, "          ");
-      for (Value* slot = stack_; slot < stackTop_; slot++) {
-        fprintf(stderr, "[ %s ]", valueToString(*slot).c_str());
-      }
-      fprintf(stderr, "\n");
-      disassembleInstruction(
-          frame->closure->function->chunk,
-          static_cast<int>(frame->ip -
-                           frame->closure->function->chunk.code.data()));
-    }
+// Dispatch: computed gotos where the compiler supports them (one indirect
+// branch per opcode, giving the branch predictor a distinct site per
+// preceding op), plain switch otherwise. Bodies are written once; VM_CASE /
+// VM_NEXT expand to labels+goto or case+break.
+#define TRACE()                                                            \
+  do {                                                                     \
+    if (traceExecution_) {                                                 \
+      fprintf(stderr, "          ");                                       \
+      for (Value* slot = stack_; slot < stackTop_; slot++) {               \
+        fprintf(stderr, "[ %s ]", valueToString(*slot).c_str());           \
+      }                                                                    \
+      fprintf(stderr, "\n");                                               \
+      disassembleInstruction(                                              \
+          frame->closure->function->chunk,                                 \
+          static_cast<int>(frame->ip -                                     \
+                           frame->closure->function->chunk.code.data()));  \
+    }                                                                      \
+  } while (false)
 
-    uint8_t instruction = READ_BYTE();
-    switch (instruction) {
-      case OP_CONSTANT:
+#if EMBER_COMPUTED_GOTO
+#define VM_CASE(name) lbl_##name
+#define VM_NEXT()                        \
+  do {                                   \
+    TRACE();                             \
+    goto* kDispatchTable[READ_BYTE()];   \
+  } while (false)
+#else
+#define VM_CASE(name) case name
+#define VM_NEXT() break
+#endif
+
+#if EMBER_COMPUTED_GOTO
+  // Order must match the OpCode enum exactly.
+  static const void* kDispatchTable[] = {
+      &&lbl_OP_CONSTANT,      &&lbl_OP_NIL,           &&lbl_OP_TRUE,
+      &&lbl_OP_FALSE,         &&lbl_OP_POP,           &&lbl_OP_GET_LOCAL,
+      &&lbl_OP_SET_LOCAL,     &&lbl_OP_GET_GLOBAL,    &&lbl_OP_DEFINE_GLOBAL,
+      &&lbl_OP_SET_GLOBAL,    &&lbl_OP_GET_UPVALUE,   &&lbl_OP_SET_UPVALUE,
+      &&lbl_OP_EQUAL,         &&lbl_OP_GREATER,       &&lbl_OP_LESS,
+      &&lbl_OP_ADD,           &&lbl_OP_SUBTRACT,      &&lbl_OP_MULTIPLY,
+      &&lbl_OP_DIVIDE,        &&lbl_OP_MODULO,        &&lbl_OP_NOT,
+      &&lbl_OP_NEGATE,        &&lbl_OP_PRINT,         &&lbl_OP_JUMP,
+      &&lbl_OP_JUMP_IF_FALSE, &&lbl_OP_LOOP,          &&lbl_OP_CALL,
+      &&lbl_OP_CLOSURE,       &&lbl_OP_CLOSE_UPVALUE, &&lbl_OP_RETURN,
+      &&lbl_OP_CONSTANT_LONG,
+  };
+  static_assert(sizeof(kDispatchTable) / sizeof(kDispatchTable[0]) ==
+                    OP_CONSTANT_LONG + 1,
+                "dispatch table must cover every opcode");
+  VM_NEXT();  // dispatch the first instruction
+#else
+  for (;;) {
+    TRACE();
+    switch (READ_BYTE()) {
+#endif
+
+      VM_CASE(OP_CONSTANT):
         push(READ_CONSTANT());
-        break;
-      case OP_CONSTANT_LONG: {
+        VM_NEXT();
+      VM_CASE(OP_CONSTANT_LONG): {
         uint16_t index = READ_SHORT();
         push(frame->closure->function->chunk.constants[index]);
-        break;
       }
-      case OP_NIL:
+        VM_NEXT();
+      VM_CASE(OP_NIL):
         push(Value::nil());
-        break;
-      case OP_TRUE:
+        VM_NEXT();
+      VM_CASE(OP_TRUE):
         push(Value::boolean(true));
-        break;
-      case OP_FALSE:
+        VM_NEXT();
+      VM_CASE(OP_FALSE):
         push(Value::boolean(false));
-        break;
-      case OP_POP:
+        VM_NEXT();
+      VM_CASE(OP_POP):
         pop();
-        break;
-      case OP_GET_LOCAL: {
+        VM_NEXT();
+      VM_CASE(OP_GET_LOCAL): {
         uint8_t slot = READ_BYTE();
         push(frame->slots[slot]);
-        break;
       }
-      case OP_SET_LOCAL: {
+        VM_NEXT();
+      VM_CASE(OP_SET_LOCAL): {
         uint8_t slot = READ_BYTE();
         frame->slots[slot] = peek(0);
-        break;
       }
-      case OP_GET_GLOBAL: {
+        VM_NEXT();
+      VM_CASE(OP_GET_GLOBAL): {
         ObjString* name = READ_STRING();
         auto it = globals_.find(name);
         if (it == globals_.end()) {
@@ -428,15 +476,15 @@ InterpretResult VM::run(int stopDepth) {
           return InterpretResult::RUNTIME_ERROR;
         }
         push(it->second);
-        break;
       }
-      case OP_DEFINE_GLOBAL: {
+        VM_NEXT();
+      VM_CASE(OP_DEFINE_GLOBAL): {
         ObjString* name = READ_STRING();
         globals_[name] = peek(0);
         pop();
-        break;
       }
-      case OP_SET_GLOBAL: {
+        VM_NEXT();
+      VM_CASE(OP_SET_GLOBAL): {
         ObjString* name = READ_STRING();
         auto it = globals_.find(name);
         if (it == globals_.end()) {
@@ -444,26 +492,26 @@ InterpretResult VM::run(int stopDepth) {
           return InterpretResult::RUNTIME_ERROR;
         }
         it->second = peek(0);
-        break;
       }
-      case OP_GET_UPVALUE: {
+        VM_NEXT();
+      VM_CASE(OP_GET_UPVALUE): {
         uint8_t slot = READ_BYTE();
         push(*frame->closure->upvalues[slot]->location);
-        break;
       }
-      case OP_SET_UPVALUE: {
+        VM_NEXT();
+      VM_CASE(OP_SET_UPVALUE): {
         uint8_t slot = READ_BYTE();
         *frame->closure->upvalues[slot]->location = peek(0);
-        break;
       }
-      case OP_EQUAL: {
+        VM_NEXT();
+      VM_CASE(OP_EQUAL): {
         RECORD_TYPES(typeBit(peek(0)) | typeBit(peek(1)));
         Value b = pop();
         Value a = pop();
         push(Value::boolean(valuesEqual(a, b)));
-        break;
       }
-      case OP_GREATER: {
+        VM_NEXT();
+      VM_CASE(OP_GREATER): {
         RECORD_TYPES(typeBit(peek(0)) | typeBit(peek(1)));
         if (peek(0).isString() && peek(1).isString()) {
           ObjString* b = asString(pop());
@@ -477,9 +525,9 @@ InterpretResult VM::run(int stopDepth) {
           runtimeError("Operands must be two numbers or two strings.");
           return InterpretResult::RUNTIME_ERROR;
         }
-        break;
       }
-      case OP_LESS: {
+        VM_NEXT();
+      VM_CASE(OP_LESS): {
         RECORD_TYPES(typeBit(peek(0)) | typeBit(peek(1)));
         if (peek(0).isString() && peek(1).isString()) {
           ObjString* b = asString(pop());
@@ -493,9 +541,9 @@ InterpretResult VM::run(int stopDepth) {
           runtimeError("Operands must be two numbers or two strings.");
           return InterpretResult::RUNTIME_ERROR;
         }
-        break;
       }
-      case OP_ADD: {
+        VM_NEXT();
+      VM_CASE(OP_ADD): {
         RECORD_TYPES(typeBit(peek(0)) | typeBit(peek(1)));
         if (peek(0).isString() && peek(1).isString()) {
           concatenate();
@@ -507,53 +555,53 @@ InterpretResult VM::run(int stopDepth) {
           runtimeError("Operands must be two numbers or two strings.");
           return InterpretResult::RUNTIME_ERROR;
         }
-        break;
       }
-      case OP_SUBTRACT:
+        VM_NEXT();
+      VM_CASE(OP_SUBTRACT):
         BINARY_OP(Value::number(a - b));
-        break;
-      case OP_MULTIPLY:
+        VM_NEXT();
+      VM_CASE(OP_MULTIPLY):
         BINARY_OP(Value::number(a * b));
-        break;
-      case OP_DIVIDE:
+        VM_NEXT();
+      VM_CASE(OP_DIVIDE):
         BINARY_OP(Value::number(a / b));
-        break;
-      case OP_MODULO:
+        VM_NEXT();
+      VM_CASE(OP_MODULO):
         BINARY_OP(Value::number(fmod(a, b)));
-        break;
-      case OP_NOT:
+        VM_NEXT();
+      VM_CASE(OP_NOT):
         push(Value::boolean(isFalsey(pop())));
-        break;
-      case OP_NEGATE:
+        VM_NEXT();
+      VM_CASE(OP_NEGATE):
         RECORD_TYPES(typeBit(peek(0)));
         if (!peek(0).isNumber()) {
           runtimeError("Operand must be a number.");
           return InterpretResult::RUNTIME_ERROR;
         }
         push(Value::number(-pop().as.number));
-        break;
-      case OP_PRINT:
+        VM_NEXT();
+      VM_CASE(OP_PRINT):
         printf("%s\n", valueToString(pop()).c_str());
-        break;
-      case OP_JUMP: {
+        VM_NEXT();
+      VM_CASE(OP_JUMP): {
         uint16_t offset = READ_SHORT();
         frame->ip += offset;
-        break;
       }
-      case OP_JUMP_IF_FALSE: {
+        VM_NEXT();
+      VM_CASE(OP_JUMP_IF_FALSE): {
         uint16_t offset = READ_SHORT();
         if (isFalsey(peek(0))) frame->ip += offset;
-        break;
       }
-      case OP_LOOP: {
+        VM_NEXT();
+      VM_CASE(OP_LOOP): {
         uint16_t offset = READ_SHORT();
         frame->ip -= offset;
         ObjFunction* fn = frame->closure->function;
         fn->backEdges++;
         maybeMarkHot(fn, logHot_);
-        break;
       }
-      case OP_CALL: {
+        VM_NEXT();
+      VM_CASE(OP_CALL): {
         int argCount = READ_BYTE();
         ObjFunction* caller = frame->closure->function;
         recordCallSite(
@@ -564,9 +612,9 @@ InterpretResult VM::run(int stopDepth) {
           return InterpretResult::RUNTIME_ERROR;
         }
         frame = &frames_[frameCount_ - 1];
-        break;
       }
-      case OP_CLOSURE: {
+        VM_NEXT();
+      VM_CASE(OP_CLOSURE): {
         ObjFunction* function = asFunction(READ_CONSTANT());
         ObjClosure* closure = gHeap.allocate<ObjClosure>(function);
         // Push before capturing: captureUpvalue allocates, and the closure
@@ -581,13 +629,13 @@ InterpretResult VM::run(int stopDepth) {
             closure->upvalues[i] = frame->closure->upvalues[index];
           }
         }
-        break;
       }
-      case OP_CLOSE_UPVALUE:
+        VM_NEXT();
+      VM_CASE(OP_CLOSE_UPVALUE):
         closeUpvalues(stackTop_ - 1);
         pop();
-        break;
-      case OP_RETURN: {
+        VM_NEXT();
+      VM_CASE(OP_RETURN): {
         Value result = pop();
         closeUpvalues(frame->slots);
         frameCount_--;
@@ -599,10 +647,15 @@ InterpretResult VM::run(int stopDepth) {
         push(result);
         if (frameCount_ == stopDepth) return InterpretResult::OK;
         frame = &frames_[frameCount_ - 1];
-        break;
       }
+        VM_NEXT();
+
+#if !EMBER_COMPUTED_GOTO
     }
   }
+#endif
+
+  return InterpretResult::RUNTIME_ERROR;  // unreachable: every case dispatches
 
 #undef READ_BYTE
 #undef READ_SHORT
@@ -610,4 +663,7 @@ InterpretResult VM::run(int stopDepth) {
 #undef READ_STRING
 #undef RECORD_TYPES
 #undef BINARY_OP
+#undef TRACE
+#undef VM_CASE
+#undef VM_NEXT
 }
