@@ -63,6 +63,38 @@ static Value pushNative(int argCount, Value* args) {
   return Value::number(static_cast<double>(array->items.size()));
 }
 
+static Value rangeNative(int argCount, Value* args) {
+  double start = 0;
+  double stop = 0;
+  if (argCount == 1 && args[0].isNumber()) {
+    stop = args[0].as.number;
+  } else if (argCount == 2 && args[0].isNumber() && args[1].isNumber()) {
+    start = args[0].as.number;
+    stop = args[1].as.number;
+  } else {
+    return Value::nil();
+  }
+  ObjArray* array = gHeap.allocate<ObjArray>();
+  for (double v = start; v < stop; v += 1) {
+    array->items.push_back(Value::number(v));
+  }
+  return Value::object(array);
+}
+
+static Value joinNative(int argCount, Value* args) {
+  if (argCount != 2 || !args[0].isArray() || !args[1].isString()) {
+    return Value::nil();
+  }
+  ObjArray* array = asArray(args[0]);
+  const std::string& sep = asString(args[1])->chars;
+  std::string out;
+  for (size_t i = 0; i < array->items.size(); i++) {
+    if (i > 0) out += sep;
+    out += valueToString(array->items[i]);
+  }
+  return Value::object(copyString(out));
+}
+
 static Value popNative(int argCount, Value* args) {
   if (argCount != 1 || !args[0].isArray()) return Value::nil();
   ObjArray* array = asArray(args[0]);
@@ -189,6 +221,8 @@ VM::VM() {
   defineNative("substr", substrNative);
   defineNative("push", pushNative);
   defineNative("pop", popNative);
+  defineNative("range", rangeNative);
+  defineNative("join", joinNative);
   defineNative("min", minNative);
   defineNative("max", maxNative);
 }
