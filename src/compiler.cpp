@@ -438,8 +438,30 @@ class Compiler {
   }
 
   void stringLit(bool) {
-    emitConstant(Value::object(
-        copyString(std::string(previous_.start + 1, previous_.length - 2))));
+    // Decode escape sequences between the quotes.
+    std::string chars;
+    const char* src = previous_.start + 1;
+    int length = previous_.length - 2;
+    for (int i = 0; i < length; i++) {
+      char c = src[i];
+      if (c == '\\' && i + 1 < length) {
+        i++;
+        switch (src[i]) {
+          case 'n': chars += '\n'; break;
+          case 't': chars += '\t'; break;
+          case 'r': chars += '\r'; break;
+          case '"': chars += '"'; break;
+          case '\\': chars += '\\'; break;
+          case '0': chars += '\0'; break;
+          default:
+            error("Unknown escape sequence in string.");
+            return;
+        }
+      } else {
+        chars += c;
+      }
+    }
+    emitConstant(Value::object(copyString(chars)));
   }
 
   void literal(bool) {

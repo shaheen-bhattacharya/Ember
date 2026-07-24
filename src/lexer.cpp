@@ -55,6 +55,9 @@ Token Lexer::errorToken(const char* message) const {
 Token Lexer::string() {
   while (peek() != '"' && !isAtEnd()) {
     if (peek() == '\n') line_++;
+    // A backslash escapes the next character (so \" doesn't end the string);
+    // the compiler decodes the sequences.
+    if (peek() == '\\' && peekNext() != '\0') advance();
     advance();
   }
   if (isAtEnd()) return errorToken("Unterminated string.");
