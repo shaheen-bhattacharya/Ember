@@ -51,6 +51,10 @@ class VM {
   const Value& peek(int distance) const;
   bool call(ObjClosure* closure, int argCount);
   bool callValue(const Value& callee, int argCount);
+  // Shared by the interpreter loop and the JIT helpers.
+  void makeArray(int count);
+  bool indexGet();
+  bool indexSet();
   ObjUpvalue* captureUpvalue(Value* local);
   void closeUpvalues(Value* last);
   void concatenate();
