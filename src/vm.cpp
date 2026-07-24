@@ -320,6 +320,76 @@ bool VM::callValue(const Value& callee, int argCount) {
   return false;
 }
 
+void VM::makeArray(int count) {
+  // Elements stay rooted on the stack across the allocation.
+  ObjArray* array = gHeap.allocate<ObjArray>();
+  array->items.assign(stackTop_ - count, stackTop_);
+  stackTop_ -= count;
+  push(Value::object(array));
+}
+
+bool VM::indexGet() {
+  if (!peek(0).isNumber()) {
+    runtimeError("Index must be a number.");
+    return false;
+  }
+  double indexNum = peek(0).as.number;
+  size_t index = static_cast<size_t>(indexNum);
+  if (peek(1).isArray()) {
+    ObjArray* array = asArray(peek(1));
+    if (indexNum < 0 || static_cast<double>(index) != indexNum ||
+        index >= array->items.size()) {
+      runtimeError("Array index out of range.");
+      return false;
+    }
+    pop();
+    pop();
+    push(array->items[index]);
+    return true;
+  }
+  if (peek(1).isString()) {
+    ObjString* string = asString(peek(1));
+    if (indexNum < 0 || static_cast<double>(index) != indexNum ||
+        index >= string->chars.size()) {
+      runtimeError("String index out of range.");
+      return false;
+    }
+    ObjString* ch = copyString(std::string(1, string->chars[index]));
+    pop();
+    pop();
+    push(Value::object(ch));
+    return true;
+  }
+  runtimeError("Can only index arrays and strings; got a %s.",
+               typeName(peek(1)));
+  return false;
+}
+
+bool VM::indexSet() {
+  if (!peek(2).isArray()) {
+    runtimeError("Can only assign into arrays; got a %s.", typeName(peek(2)));
+    return false;
+  }
+  if (!peek(1).isNumber()) {
+    runtimeError("Index must be a number.");
+    return false;
+  }
+  ObjArray* array = asArray(peek(2));
+  double indexNum = peek(1).as.number;
+  size_t index = static_cast<size_t>(indexNum);
+  if (indexNum < 0 || static_cast<double>(index) != indexNum ||
+      index >= array->items.size()) {
+    runtimeError("Array index out of range.");
+    return false;
+  }
+  Value value = pop();
+  pop();  // index
+  pop();  // array
+  array->items[index] = value;
+  push(value);  // assignment is an expression
+  return true;
+}
+
 // Returns the upvalue for a stack slot, reusing an existing open one so every
 // closure over the same variable shares the same storage.
 ObjUpvalue* VM::captureUpvalue(Value* local) {
@@ -659,72 +729,14 @@ InterpretResult VM::run(int stopDepth) {
         VM_NEXT();
       VM_CASE(OP_ARRAY): {
         uint8_t count = READ_BYTE();
-        // Elements stay rooted on the stack across the allocation.
-        ObjArray* array = gHeap.allocate<ObjArray>();
-        array->items.assign(stackTop_ - count, stackTop_);
-        stackTop_ -= count;
-        push(Value::object(array));
+        makeArray(count);
       }
         VM_NEXT();
-      VM_CASE(OP_INDEX_GET): {
-        if (!peek(0).isNumber()) {
-          runtimeError("Index must be a number.");
-          return InterpretResult::RUNTIME_ERROR;
-        }
-        double indexNum = peek(0).as.number;
-        size_t index = static_cast<size_t>(indexNum);
-        if (peek(1).isArray()) {
-          ObjArray* array = asArray(peek(1));
-          if (indexNum < 0 || static_cast<double>(index) != indexNum ||
-              index >= array->items.size()) {
-            runtimeError("Array index out of range.");
-            return InterpretResult::RUNTIME_ERROR;
-          }
-          pop();
-          pop();
-          push(array->items[index]);
-        } else if (peek(1).isString()) {
-          ObjString* string = asString(peek(1));
-          if (indexNum < 0 || static_cast<double>(index) != indexNum ||
-              index >= string->chars.size()) {
-            runtimeError("String index out of range.");
-            return InterpretResult::RUNTIME_ERROR;
-          }
-          ObjString* ch = copyString(std::string(1, string->chars[index]));
-          pop();
-          pop();
-          push(Value::object(ch));
-        } else {
-          runtimeError("Can only index arrays and strings; got a %s.",
-                       typeName(peek(1)));
-          return InterpretResult::RUNTIME_ERROR;
-        }
-      }
+      VM_CASE(OP_INDEX_GET):
+        if (!indexGet()) return InterpretResult::RUNTIME_ERROR;
         VM_NEXT();
-      VM_CASE(OP_INDEX_SET): {
-        if (!peek(2).isArray()) {
-          runtimeError("Can only assign into arrays; got a %s.",
-                       typeName(peek(2)));
-          return InterpretResult::RUNTIME_ERROR;
-        }
-        if (!peek(1).isNumber()) {
-          runtimeError("Index must be a number.");
-          return InterpretResult::RUNTIME_ERROR;
-        }
-        ObjArray* array = asArray(peek(2));
-        double indexNum = peek(1).as.number;
-        size_t index = static_cast<size_t>(indexNum);
-        if (indexNum < 0 || static_cast<double>(index) != indexNum ||
-            index >= array->items.size()) {
-          runtimeError("Array index out of range.");
-          return InterpretResult::RUNTIME_ERROR;
-        }
-        Value value = pop();
-        pop();  // index
-        pop();  // array
-        array->items[index] = value;
-        push(value);  // assignment is an expression
-      }
+      VM_CASE(OP_INDEX_SET):
+        if (!indexSet()) return InterpretResult::RUNTIME_ERROR;
         VM_NEXT();
       VM_CASE(OP_CLOSE_UPVALUE):
         closeUpvalues(stackTop_ - 1);

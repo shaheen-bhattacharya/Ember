@@ -117,6 +117,7 @@ class TemplateCompiler {
       case OP_DEFINE_GLOBAL:
       case OP_GET_UPVALUE:
       case OP_SET_UPVALUE:
+      case OP_ARRAY:
         return 2;
       case OP_JUMP:
       case OP_JUMP_IF_FALSE:
@@ -140,6 +141,8 @@ class TemplateCompiler {
       case OP_PRINT:
       case OP_RETURN:
       case OP_CLOSE_UPVALUE:
+      case OP_INDEX_GET:
+      case OP_INDEX_SET:
         return 1;
       default:
         return -1;
@@ -534,6 +537,18 @@ class TemplateCompiler {
         return offset + 2;
       case OP_CLOSE_UPVALUE:
         emitHelper1(reinterpret_cast<void*>(ember_jit_close_upvalue));
+        return offset + 1;
+      case OP_ARRAY:
+        emitHelper2(reinterpret_cast<void*>(ember_jit_array),
+                    code[offset + 1]);
+        return offset + 2;
+      case OP_INDEX_GET:
+        emitHelper2Checked(reinterpret_cast<void*>(ember_jit_index_get),
+                           offset);
+        return offset + 1;
+      case OP_INDEX_SET:
+        emitHelper2Checked(reinterpret_cast<void*>(ember_jit_index_set),
+                           offset);
         return offset + 1;
       case OP_JUMP: {
         a_.b(targets_[offset + 3 + read16(offset + 1)]);

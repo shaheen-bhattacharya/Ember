@@ -33,6 +33,9 @@ struct JitRuntime {
   static void getUpvalue(VM* vm, int slot);
   static void setUpvalue(VM* vm, int slot);
   static void closeUpvalue(VM* vm);
+  static void arrayOp(VM* vm, int count);
+  static int indexGetOp(VM* vm, int bcOffset);
+  static int indexSetOp(VM* vm, int bcOffset);
 };
 
 // C-ABI slow-path helpers that template-compiled code calls. Each fallible
@@ -59,4 +62,7 @@ void ember_jit_closure(VM* vm, ObjFunction* target, const uint8_t* pairs);
 void ember_jit_get_upvalue(VM* vm, int slot);
 void ember_jit_set_upvalue(VM* vm, int slot);
 void ember_jit_close_upvalue(VM* vm);
+void ember_jit_array(VM* vm, int count);
+int ember_jit_index_get(VM* vm, int bcOffset);
+int ember_jit_index_set(VM* vm, int bcOffset);
 }

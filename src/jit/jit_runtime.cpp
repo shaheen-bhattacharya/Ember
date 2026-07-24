@@ -229,6 +229,18 @@ void JitRuntime::closeUpvalue(VM* vm) {
   pop(vm);
 }
 
+void JitRuntime::arrayOp(VM* vm, int count) { vm->makeArray(count); }
+
+int JitRuntime::indexGetOp(VM* vm, int bcOffset) {
+  syncIp(vm, bcOffset);
+  return vm->indexGet() ? 1 : 0;
+}
+
+int JitRuntime::indexSetOp(VM* vm, int bcOffset) {
+  syncIp(vm, bcOffset);
+  return vm->indexSet() ? 1 : 0;
+}
+
 extern "C" {
 
 int ember_jit_binary(VM* vm, int op, int bcOffset) {
@@ -271,5 +283,12 @@ void ember_jit_set_upvalue(VM* vm, int slot) {
   JitRuntime::setUpvalue(vm, slot);
 }
 void ember_jit_close_upvalue(VM* vm) { JitRuntime::closeUpvalue(vm); }
+void ember_jit_array(VM* vm, int count) { JitRuntime::arrayOp(vm, count); }
+int ember_jit_index_get(VM* vm, int bcOffset) {
+  return JitRuntime::indexGetOp(vm, bcOffset);
+}
+int ember_jit_index_set(VM* vm, int bcOffset) {
+  return JitRuntime::indexSetOp(vm, bcOffset);
+}
 
 }  // extern "C"
