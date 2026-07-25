@@ -21,6 +21,13 @@ loads/stores it directly. Sound because node addresses survive rehashes and
 globals can't be deleted. Recursion resolves the callee through a global, so
 this took fib from 0.061s to 0.036s.
 
+**Constant folding without an AST.** The compiler tracks the last two
+number-constant loads at the chunk tail; arithmetic on them (including
+through unary minus) rewrites the tail with the folded result. Truncation
+only ever removes the tracked tail, so recorded jump targets stay on
+instruction boundaries — the invariant that makes a peephole safe in a
+single-pass compiler.
+
 **Single-pass compiler, no AST.** The Pratt parser emits bytecode as it
 parses. This is the fastest possible compile pipeline (one token of
 lookahead, no tree allocation) and is exactly what a baseline JIT tier wants:
