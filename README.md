@@ -19,7 +19,7 @@ print "fib(30) = " + str(fib(30));
 print "took " + str(clock() - start) + "s";
 ```
 
-Dynamic typing over four value kinds (`nil`, booleans, 64-bit float numbers, heap objects), first-class functions and closures (with shared mutable captures, Lua-style upvalues), lexically-scoped locals, `if`/`else`, `while`, `for` with `break`/`continue`, short-circuiting `and`/`or`, compound assignment (`+=`, `-=`), numeric literals with underscore separators (`1_000_000`), strings with `+` concatenation, lexicographic `<`/`>` comparison, and `s[i]` indexing, arrays (`[1, 2, 3]` literals, `a[i]` get/set, reference semantics), and native functions (`clock`, `str`, `sqrt`, `abs`, `floor`, `ceil`, `round`, `min`, `max`, `len`, `substr`, `push`, `pop`). Snippets live in [examples/](examples/); complete programs (Game of Life, quicksort) in [samples/](samples/).
+Dynamic typing over four value kinds (`nil`, booleans, 64-bit float numbers, heap objects), first-class functions and closures (with shared mutable captures, Lua-style upvalues), lexically-scoped locals, `if`/`else`, `while`, `for` with `break`/`continue`, short-circuiting `and`/`or`, compound assignment (`+=`, `-=`), numeric literals with underscore separators (`1_000_000`), strings with `+` concatenation, lexicographic `<`/`>` comparison, `s[i]` indexing, and escape sequences (`\n`, `\t`, `\"`, `\\`), arrays (`[1, 2, 3]` literals, `a[i]` get/set, reference semantics), and native functions (`clock`, `str`, `sqrt`, `abs`, `floor`, `ceil`, `round`, `min`, `max`, `len`, `substr`, `push`, `pop`, `range`, `join`, `chr`, `ord`). The compiler folds constant arithmetic; the REPL echoes expression values; compile errors point at the offending token with a caret. Snippets live in [examples/](examples/); complete programs (Game of Life, quicksort) in [samples/](samples/).
 
 ## Build and run
 
@@ -74,7 +74,7 @@ The point of this project is the full tiered-execution architecture:
 - [x] Closures with upvalues (shared mutable capture, closed on scope exit)
 - [x] Type feedback: hotness counters, per-site operand type recording, monomorphic call-site caches (`EMBER_PROFILE=1`)
 - [x] **Tier 1 — baseline JIT**: template-compile bytecode to AArch64, `mmap(MAP_JIT)` code pages, interpreter↔JIT calling convention, closures, compare+branch fusion, global inline caches
-- [ ] Array opcodes in the JIT (array-using functions currently stay interpreted)
+- [x] Array opcodes in the JIT (sieve benchmark: 3.9× over the interpreter)
 - [ ] Classes if the fancy strikes
 - [ ] **Tier 2 — optimizing JIT**: SSA IR, type specialization from recorded feedback, inlining, DCE, linear-scan register allocation
 - [ ] **Deoptimization**: bail from speculative JIT code back to the interpreter, reconstructing frames
