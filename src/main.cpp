@@ -26,15 +26,22 @@ static std::string readFile(const char* path) {
 
 static void repl(VM& vm) {
   std::string line;
-  printf("ember " EMBER_VERSION
-         " — tier 0 (bytecode interpreter). Ctrl-D to exit.\n");
+  printf("ember " EMBER_VERSION " — type an expression to see its value. "
+         "Ctrl-D to exit.\n");
   for (;;) {
     printf("> ");
     if (!std::getline(std::cin, line)) {
       printf("\n");
       break;
     }
-    vm.interpret(line);
+    // If the line parses as a bare expression, echo its value; otherwise run
+    // it as a statement. The probe compile is silent.
+    std::string wrapped = "print (" + line + ");";
+    if (compileSource(wrapped, /*quietErrors=*/true) != nullptr) {
+      vm.interpret(wrapped);
+    } else {
+      vm.interpret(line);
+    }
   }
 }
 
