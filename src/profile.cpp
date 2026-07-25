@@ -98,8 +98,14 @@ void printProfile() {
 
   fprintf(stderr, "== profile ==\n");
   for (ObjFunction* fn : functions) {
-    fprintf(stderr, "%s: %u calls, %u back-edges%s\n", functionName(fn),
-            fn->callCount, fn->backEdges, fn->hot ? ", HOT" : "");
+    const char* tier = "";
+    if (fn->jitState == JitState::COMPILED) {
+      tier = ", tier-1 (jit)";
+    } else if (fn->jitState == JitState::UNSUPPORTED) {
+      tier = ", tier-0 (jit rejected)";
+    }
+    fprintf(stderr, "%s: %u calls, %u back-edges%s%s\n", functionName(fn),
+            fn->callCount, fn->backEdges, fn->hot ? ", HOT" : "", tier);
 
     int codeSize = static_cast<int>(fn->chunk.code.size());
     for (int offset = 0; offset < codeSize;
