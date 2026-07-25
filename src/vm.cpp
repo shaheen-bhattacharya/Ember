@@ -63,6 +63,25 @@ static Value pushNative(int argCount, Value* args) {
   return Value::number(static_cast<double>(array->items.size()));
 }
 
+static Value chrNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isNumber()) return Value::nil();
+  double code = args[0].as.number;
+  if (code < 0 || code > 255 || code != static_cast<double>(
+                                            static_cast<int>(code))) {
+    return Value::nil();
+  }
+  return Value::object(copyString(std::string(1, static_cast<char>(
+                                                     static_cast<int>(code)))));
+}
+
+static Value ordNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isString()) return Value::nil();
+  const std::string& s = asString(args[0])->chars;
+  if (s.empty()) return Value::nil();
+  return Value::number(static_cast<double>(
+      static_cast<unsigned char>(s[0])));
+}
+
 static Value rangeNative(int argCount, Value* args) {
   double start = 0;
   double stop = 0;
@@ -223,6 +242,8 @@ VM::VM() {
   defineNative("pop", popNative);
   defineNative("range", rangeNative);
   defineNative("join", joinNative);
+  defineNative("chr", chrNative);
+  defineNative("ord", ordNative);
   defineNative("min", minNative);
   defineNative("max", maxNative);
 }
