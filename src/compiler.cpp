@@ -81,7 +81,7 @@ struct ParseRule {
 class Compiler {
  public:
   explicit Compiler(const std::string& source, bool quietErrors)
-      : lexer_(source.c_str()), quietErrors_(quietErrors) {}
+      : source_(source), lexer_(source.c_str()), quietErrors_(quietErrors) {}
 
   ObjFunction* compile() {
     FunctionCompiler compiler;
@@ -96,6 +96,7 @@ class Compiler {
   }
 
  private:
+  const std::string& source_;
   Lexer lexer_;
   Token current_;
   Token previous_;
@@ -131,7 +132,26 @@ class Compiler {
       fprintf(stderr, " at '%.*s'", token.length, token.start);
     }
     fprintf(stderr, ": %s\n", message);
+    showSourceLine(token);
     hadError_ = true;
+  }
+
+  // Prints the offending line with a caret under the token, when the token
+  // points into the source (error tokens carry a message string instead).
+  void showSourceLine(const Token& token) {
+    const char* begin = source_.data();
+    const char* end = begin + source_.size();
+    const char* at = token.start;
+    if (at == nullptr || at < begin || at > end) return;
+
+    const char* lineStart = at;
+    while (lineStart > begin && lineStart[-1] != '\n') lineStart--;
+    const char* lineEnd = at;
+    while (lineEnd < end && *lineEnd != '\n') lineEnd++;
+
+    fprintf(stderr, "  %4d | %.*s\n", token.line,
+            static_cast<int>(lineEnd - lineStart), lineStart);
+    fprintf(stderr, "       | %*s^\n", static_cast<int>(at - lineStart), "");
   }
 
   void error(const char* message) { errorAt(previous_, message); }
