@@ -4,6 +4,7 @@
 #include "compiler.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -102,6 +103,16 @@ class Compiler {
   FunctionCompiler* current_fc_ = nullptr;
   LoopContext* currentLoop_ = nullptr;
 
+  // Peephole state for constant folding: the last two number-constant loads
+  // at the very tail of the current chunk. Any other emission invalidates.
+  struct TailConst {
+    int start = -1;  // byte offset of the load instruction, -1 = none
+    int length = 0;
+    double value = 0;
+  };
+  TailConst lastConst_;
+  TailConst prevConst_;
+
   Chunk& currentChunk() { return current_fc_->function->chunk; }
 
   // ---- error handling ----
@@ -151,7 +162,11 @@ class Compiler {
 
   // ---- bytecode emission ----
 
-  void emitByte(uint8_t byte) { currentChunk().write(byte, previous_.line); }
+  void emitByte(uint8_t byte) {
+    lastConst_ = TailConst{};
+    prevConst_ = TailConst{};
+    currentChunk().write(byte, previous_.line);
+  }
 
   void emitBytes(uint8_t byte1, uint8_t byte2) {
     emitByte(byte1);
@@ -210,6 +225,8 @@ class Compiler {
 
   // Literals get the wide encoding when the pool grows past 256.
   void emitConstant(const Value& value) {
+    TailConst shifted = lastConst_;  // emitByte clears tracking; restore after
+    int start = static_cast<int>(currentChunk().code.size());
     int constant = findOrAddConstant(value, UINT16_MAX);
     if (constant > UINT16_MAX) {
       error("Too many constants in one chunk.");
@@ -222,6 +239,64 @@ class Compiler {
       emitByte((constant >> 8) & 0xff);
       emitByte(constant & 0xff);
     }
+    if (value.isNumber()) {
+      prevConst_ = shifted;
+      lastConst_.start = start;
+      lastConst_.length = static_cast<int>(currentChunk().code.size()) - start;
+      lastConst_.value = value.as.number;
+    }
+  }
+
+  // If the chunk tail is exactly [CONST a][CONST b], replace it with the
+  // folded result. Recorded jump targets can only point at the first
+  // instruction's start, which stays an instruction boundary.
+  bool tryFoldBinary(TokenType op) {
+    int codeSize = static_cast<int>(currentChunk().code.size());
+    if (lastConst_.start < 0 || prevConst_.start < 0) return false;
+    if (lastConst_.start + lastConst_.length != codeSize) return false;
+    if (prevConst_.start + prevConst_.length != lastConst_.start) return false;
+
+    double a = prevConst_.value;
+    double b = lastConst_.value;
+    double result;
+    switch (op) {
+      case TOKEN_PLUS: result = a + b; break;
+      case TOKEN_MINUS: result = a - b; break;
+      case TOKEN_STAR: result = a * b; break;
+      case TOKEN_SLASH: result = a / b; break;
+      case TOKEN_PERCENT: result = fmod(a, b); break;
+      default: return false;
+    }
+    truncateTo(prevConst_.start);
+    emitConstant(Value::number(result));
+    return true;
+  }
+
+  bool tryFoldNegate() {
+    int codeSize = static_cast<int>(currentChunk().code.size());
+    if (lastConst_.start < 0 ||
+        lastConst_.start + lastConst_.length != codeSize) {
+      return false;
+    }
+    double value = lastConst_.value;
+    // Only the last constant is rewritten; the one before it (if adjacent)
+    // is still valid, so keep it foldable: `4 * -2` folds all the way.
+    TailConst keepPrev = prevConst_;
+    truncateTo(lastConst_.start);
+    emitConstant(Value::number(-value));
+    if (keepPrev.start >= 0 &&
+        keepPrev.start + keepPrev.length == lastConst_.start) {
+      prevConst_ = keepPrev;
+    }
+    return true;
+  }
+
+  void truncateTo(int size) {
+    Chunk& chunk = currentChunk();
+    chunk.code.resize(size);
+    chunk.lines.resize(size);
+    lastConst_ = TailConst{};
+    prevConst_ = TailConst{};
   }
 
   // ---- compiler state ----
@@ -480,7 +555,9 @@ class Compiler {
     parsePrecedence(PREC_UNARY);
     switch (operatorType) {
       case TOKEN_BANG: emitByte(OP_NOT); break;
-      case TOKEN_MINUS: emitByte(OP_NEGATE); break;
+      case TOKEN_MINUS:
+        if (!tryFoldNegate()) emitByte(OP_NEGATE);
+        break;
       default: return;  // unreachable
     }
   }
@@ -489,6 +566,8 @@ class Compiler {
     TokenType operatorType = previous_.type;
     const ParseRule& rule = getRule(operatorType);
     parsePrecedence(static_cast<Precedence>(rule.precedence + 1));
+
+    if (tryFoldBinary(operatorType)) return;
 
     switch (operatorType) {
       case TOKEN_BANG_EQUAL: emitBytes(OP_EQUAL, OP_NOT); break;
