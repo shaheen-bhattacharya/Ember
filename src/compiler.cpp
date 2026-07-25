@@ -80,7 +80,8 @@ struct ParseRule {
 
 class Compiler {
  public:
-  explicit Compiler(const std::string& source) : lexer_(source.c_str()) {}
+  explicit Compiler(const std::string& source, bool quietErrors)
+      : lexer_(source.c_str()), quietErrors_(quietErrors) {}
 
   ObjFunction* compile() {
     FunctionCompiler compiler;
@@ -100,6 +101,7 @@ class Compiler {
   Token previous_;
   bool hadError_ = false;
   bool panicMode_ = false;
+  bool quietErrors_ = false;
   FunctionCompiler* current_fc_ = nullptr;
   LoopContext* currentLoop_ = nullptr;
 
@@ -120,6 +122,8 @@ class Compiler {
   void errorAt(const Token& token, const char* message) {
     if (panicMode_) return;
     panicMode_ = true;
+    hadError_ = true;
+    if (quietErrors_) return;
     fprintf(stderr, "[line %d] Error", token.line);
     if (token.type == TOKEN_EOF) {
       fprintf(stderr, " at end");
@@ -979,7 +983,7 @@ class Compiler {
 
 }  // namespace
 
-ObjFunction* compileSource(const std::string& source) {
-  Compiler compiler(source);
+ObjFunction* compileSource(const std::string& source, bool quietErrors) {
+  Compiler compiler(source, quietErrors);
   return compiler.compile();
 }
