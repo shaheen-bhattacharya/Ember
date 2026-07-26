@@ -1,5 +1,6 @@
 #include "vm.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdarg>
@@ -61,6 +62,33 @@ static Value pushNative(int argCount, Value* args) {
   ObjArray* array = asArray(args[0]);
   array->items.push_back(args[1]);
   return Value::number(static_cast<double>(array->items.size()));
+}
+
+static Value sortNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isArray()) return Value::nil();
+  ObjArray* array = asArray(args[0]);
+  bool allNumbers = true;
+  bool allStrings = true;
+  for (const Value& v : array->items) {
+    if (!v.isNumber()) allNumbers = false;
+    if (!v.isString()) allStrings = false;
+  }
+  // Only homogeneous arrays have a defined order; anything else is left
+  // untouched and answers nil.
+  if (allNumbers) {
+    std::sort(array->items.begin(), array->items.end(),
+              [](const Value& a, const Value& b) {
+                return a.as.number < b.as.number;
+              });
+  } else if (allStrings) {
+    std::sort(array->items.begin(), array->items.end(),
+              [](const Value& a, const Value& b) {
+                return asString(a)->chars < asString(b)->chars;
+              });
+  } else {
+    return Value::nil();
+  }
+  return args[0];  // the array itself, for chaining
 }
 
 static Value chrNative(int argCount, Value* args) {
@@ -244,6 +272,7 @@ VM::VM() {
   defineNative("join", joinNative);
   defineNative("chr", chrNative);
   defineNative("ord", ordNative);
+  defineNative("sort", sortNative);
   defineNative("min", minNative);
   defineNative("max", maxNative);
 }
