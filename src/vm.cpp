@@ -64,6 +64,44 @@ static Value pushNative(int argCount, Value* args) {
   return Value::number(static_cast<double>(array->items.size()));
 }
 
+static Value splitNative(int argCount, Value* args) {
+  if (argCount != 2 || !args[0].isString() || !args[1].isString()) {
+    return Value::nil();
+  }
+  const std::string& s = asString(args[0])->chars;
+  const std::string& sep = asString(args[1])->chars;
+  if (sep.empty()) return Value::nil();
+
+  // The array under construction isn't reachable from any GC root while its
+  // element strings are being allocated, so pause collection: a collect
+  // triggered by copyString would sweep the array out from under us.
+  bool gcWasEnabled = gHeap.gcEnabled;
+  gHeap.gcEnabled = false;
+  ObjArray* array = gHeap.allocate<ObjArray>();
+  size_t start = 0;
+  for (;;) {
+    size_t at = s.find(sep, start);
+    if (at == std::string::npos) {
+      array->items.push_back(Value::object(copyString(s.substr(start))));
+      break;
+    }
+    array->items.push_back(
+        Value::object(copyString(s.substr(start, at - start))));
+    start = at + sep.size();
+  }
+  gHeap.gcEnabled = gcWasEnabled;
+  return Value::object(array);
+}
+
+static Value indexOfNative(int argCount, Value* args) {
+  if (argCount != 2 || !args[0].isString() || !args[1].isString()) {
+    return Value::nil();
+  }
+  size_t at = asString(args[0])->chars.find(asString(args[1])->chars);
+  if (at == std::string::npos) return Value::number(-1);
+  return Value::number(static_cast<double>(at));
+}
+
 static Value sortNative(int argCount, Value* args) {
   if (argCount != 1 || !args[0].isArray()) return Value::nil();
   ObjArray* array = asArray(args[0]);
@@ -273,6 +311,8 @@ VM::VM() {
   defineNative("chr", chrNative);
   defineNative("ord", ordNative);
   defineNative("sort", sortNative);
+  defineNative("split", splitNative);
+  defineNative("indexOf", indexOfNative);
   defineNative("min", minNative);
   defineNative("max", maxNative);
 }
