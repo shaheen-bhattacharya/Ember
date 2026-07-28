@@ -35,6 +35,23 @@ static Value strNative(int argCount, Value* args) {
   return Value::object(copyString(valueToString(args[0])));
 }
 
+static Value numNative(int argCount, Value* args) {
+  if (argCount != 1) return Value::nil();
+  if (args[0].isNumber()) return args[0];
+  if (!args[0].isString()) return Value::nil();
+  const std::string& s = asString(args[0])->chars;
+  // Trim ASCII whitespace on both ends, then require the parse to consume
+  // everything that remains: "  42 " is a number, "4x" is not.
+  size_t begin = s.find_first_not_of(" \t\n\r");
+  if (begin == std::string::npos) return Value::nil();
+  size_t end = s.find_last_not_of(" \t\n\r") + 1;
+  std::string trimmed = s.substr(begin, end - begin);
+  char* parseEnd = nullptr;
+  double v = strtod(trimmed.c_str(), &parseEnd);
+  if (parseEnd != trimmed.c_str() + trimmed.size()) return Value::nil();
+  return Value::number(v);
+}
+
 static Value sqrtNative(int argCount, Value* args) {
   if (argCount != 1 || !args[0].isNumber()) return Value::nil();
   return Value::number(sqrt(args[0].as.number));
@@ -297,6 +314,7 @@ VM::VM() {
   gHeap.stressGC = getenv("EMBER_GC_STRESS") != nullptr;
   defineNative("clock", clockNative);
   defineNative("str", strNative);
+  defineNative("num", numNative);
   defineNative("sqrt", sqrtNative);
   defineNative("abs", absNative);
   defineNative("floor", floorNative);
