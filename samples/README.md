@@ -9,6 +9,7 @@ native library.
 | [`life.em`](life.em) | Conway's Game of Life on a wrapping grid — nested arrays, grid math with `%`, a glider crawling across four printed generations |
 | [`sort.em`](sort.em) | In-place quicksort with a partition helper, a deterministic LCG input generator, and a sortedness check — recursion over array slices |
 | [`wordfreq.em`](wordfreq.em) | Word frequency counting via `split` → `sort` → run-length counting — the string/array toolkit end to end |
+| [`nqueens.em`](nqueens.em) | N-Queens backtracking — an array as an explicit stack of column choices, diagonal math with `abs`, counts checked against the known sequence |
 
 Run any of them with:
 
