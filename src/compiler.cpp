@@ -485,13 +485,21 @@ class Compiler {
     if (canAssign && match(TOKEN_EQUAL)) {
       expression();
       emitBytes(setOp, static_cast<uint8_t>(arg));
-    } else if (canAssign && (check(TOKEN_PLUS_EQUAL) || check(TOKEN_MINUS_EQUAL))) {
+    } else if (canAssign && (check(TOKEN_PLUS_EQUAL) || check(TOKEN_MINUS_EQUAL) ||
+                             check(TOKEN_STAR_EQUAL) || check(TOKEN_SLASH_EQUAL) ||
+                             check(TOKEN_PERCENT_EQUAL))) {
       // Desugar `x op= e` to `x = x op e`.
-      bool isAdd = check(TOKEN_PLUS_EQUAL);
+      TokenType op = current_.type;
       advance();  // consume the compound operator
       emitBytes(getOp, static_cast<uint8_t>(arg));
       expression();
-      emitByte(isAdd ? OP_ADD : OP_SUBTRACT);
+      switch (op) {
+        case TOKEN_PLUS_EQUAL: emitByte(OP_ADD); break;
+        case TOKEN_MINUS_EQUAL: emitByte(OP_SUBTRACT); break;
+        case TOKEN_STAR_EQUAL: emitByte(OP_MULTIPLY); break;
+        case TOKEN_SLASH_EQUAL: emitByte(OP_DIVIDE); break;
+        default: emitByte(OP_MODULO); break;
+      }
       emitBytes(setOp, static_cast<uint8_t>(arg));
     } else {
       emitBytes(getOp, static_cast<uint8_t>(arg));
