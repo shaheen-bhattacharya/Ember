@@ -24,6 +24,30 @@ void Lexer::skipWhitespace() {
       case '/':
         if (peekNext() == '/') {
           while (peek() != '\n' && !isAtEnd()) advance();
+        } else if (peekNext() == '*') {
+          // Block comments nest, so commenting out code that already
+          // contains one still works.
+          advance();
+          advance();
+          int depth = 1;
+          while (depth > 0 && !isAtEnd()) {
+            if (peek() == '/' && peekNext() == '*') {
+              advance();
+              advance();
+              depth++;
+            } else if (peek() == '*' && peekNext() == '/') {
+              advance();
+              advance();
+              depth--;
+            } else {
+              if (peek() == '\n') line_++;
+              advance();
+            }
+          }
+          if (depth > 0) {
+            unterminatedComment_ = true;
+            return;
+          }
         } else {
           return;
         }
@@ -114,6 +138,12 @@ Token Lexer::identifier() {
 Token Lexer::scanToken() {
   skipWhitespace();
   start_ = current_;
+  if (unterminatedComment_) {
+    // Report once, then fall through to EOF on the next scan so the
+    // compiler's error loop terminates.
+    unterminatedComment_ = false;
+    return errorToken("Unterminated block comment.");
+  }
   if (isAtEnd()) return makeToken(TOKEN_EOF);
 
   char c = advance();

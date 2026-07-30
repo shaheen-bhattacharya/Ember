@@ -41,6 +41,7 @@ class Lexer {
   const char* start_;
   const char* current_;
   int line_ = 1;
+  bool unterminatedComment_ = false;
 
   bool isAtEnd() const { return *current_ == '\0'; }
   char advance() { return *current_++; }
