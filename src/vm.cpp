@@ -1,6 +1,7 @@
 #include "vm.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdarg>
@@ -219,6 +220,29 @@ static Value substrNative(int argCount, Value* args) {
       copyString(s.substr(start, static_cast<size_t>(lenD))));
 }
 
+static Value upperNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isString()) return Value::nil();
+  std::string s = asString(args[0])->chars;
+  for (char& c : s) c = static_cast<char>(toupper(static_cast<unsigned char>(c)));
+  return Value::object(copyString(s));
+}
+
+static Value lowerNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isString()) return Value::nil();
+  std::string s = asString(args[0])->chars;
+  for (char& c : s) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+  return Value::object(copyString(s));
+}
+
+static Value trimNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isString()) return Value::nil();
+  const std::string& s = asString(args[0])->chars;
+  size_t begin = s.find_first_not_of(" \t\n\r");
+  if (begin == std::string::npos) return Value::object(copyString(""));
+  size_t end = s.find_last_not_of(" \t\n\r") + 1;
+  return Value::object(copyString(s.substr(begin, end - begin)));
+}
+
 static Value minNative(int argCount, Value* args) {
   if (argCount != 2 || !args[0].isNumber() || !args[1].isNumber()) {
     return Value::nil();
@@ -304,6 +328,9 @@ VM::VM() {
   defineNative("round", roundNative);
   defineNative("len", lenNative);
   defineNative("substr", substrNative);
+  defineNative("upper", upperNative);
+  defineNative("lower", lowerNative);
+  defineNative("trim", trimNative);
   defineNative("push", pushNative);
   defineNative("pop", popNative);
   defineNative("range", rangeNative);
