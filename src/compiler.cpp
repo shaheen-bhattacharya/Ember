@@ -20,6 +20,7 @@ namespace {
 enum Precedence {
   PREC_NONE,
   PREC_ASSIGNMENT,  // =
+  PREC_TERNARY,     // ?:
   PREC_OR,          // or
   PREC_AND,         // and
   PREC_EQUALITY,    // == !=
@@ -625,6 +626,21 @@ class Compiler {
     patchJump(endJump);
   }
 
+  // `cond ? then : else` — same jump shape as if/else, but as an expression.
+  // Only the taken branch evaluates. The else branch parses at PREC_TERNARY,
+  // making the operator right-associative: a ? b : c ? d : e nests rightward.
+  void ternary(bool) {
+    int elseJump = emitJump(OP_JUMP_IF_FALSE);
+    emitByte(OP_POP);  // condition
+    expression();
+    int endJump = emitJump(OP_JUMP);
+    consume(TOKEN_COLON, "Expect ':' in conditional expression.");
+    patchJump(elseJump);
+    emitByte(OP_POP);  // condition
+    parsePrecedence(PREC_TERNARY);
+    patchJump(endJump);
+  }
+
   void arrayLiteral(bool) {
     int count = 0;
     if (!check(TOKEN_RIGHT_BRACKET)) {
@@ -691,6 +707,10 @@ class Compiler {
       case TOKEN_STAR:
       case TOKEN_PERCENT: {
         static const ParseRule r = {nullptr, &Compiler::binary, PREC_FACTOR};
+        return r;
+      }
+      case TOKEN_QUESTION: {
+        static const ParseRule r = {nullptr, &Compiler::ternary, PREC_TERNARY};
         return r;
       }
       case TOKEN_BANG: {
