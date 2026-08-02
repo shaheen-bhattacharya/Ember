@@ -544,6 +544,13 @@ class Compiler {
     emitConstant(Value::number(value));
   }
 
+  static int hexDigitValue(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+  }
+
   void stringLit(bool) {
     // Decode escape sequences between the quotes.
     std::string chars;
@@ -560,6 +567,18 @@ class Compiler {
           case '"': chars += '"'; break;
           case '\\': chars += '\\'; break;
           case '0': chars += '\0'; break;
+          case 'x': {
+            // \xNN: exactly two hex digits.
+            int hi = i + 1 < length ? hexDigitValue(src[i + 1]) : -1;
+            int lo = i + 2 < length ? hexDigitValue(src[i + 2]) : -1;
+            if (hi < 0 || lo < 0) {
+              error("Expect two hex digits after \\x in string.");
+              return;
+            }
+            chars += static_cast<char>(hi * 16 + lo);
+            i += 2;
+            break;
+          }
           default:
             error("Unknown escape sequence in string.");
             return;
