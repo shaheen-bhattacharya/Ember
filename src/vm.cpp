@@ -130,6 +130,40 @@ static Value sortNative(int argCount, Value* args) {
   return args[0];  // the array itself, for chaining
 }
 
+static Value reverseNative(int argCount, Value* args) {
+  if (argCount != 1) return Value::nil();
+  if (args[0].isArray()) {
+    ObjArray* array = asArray(args[0]);
+    std::reverse(array->items.begin(), array->items.end());
+    return args[0];  // in place, returned for chaining like sort
+  }
+  if (args[0].isString()) {
+    std::string s = asString(args[0])->chars;
+    std::reverse(s.begin(), s.end());
+    return Value::object(copyString(s));  // strings are immutable: a copy
+  }
+  return Value::nil();
+}
+
+static Value sliceNative(int argCount, Value* args) {
+  if (argCount != 3 || !args[0].isArray() || !args[1].isNumber() ||
+      !args[2].isNumber()) {
+    return Value::nil();
+  }
+  double startD = args[1].as.number;
+  double lenD = args[2].as.number;
+  if (startD < 0 || lenD < 0) return Value::nil();
+  ObjArray* source = asArray(args[0]);
+  ObjArray* out = gHeap.allocate<ObjArray>();
+  size_t start = static_cast<size_t>(startD);
+  for (size_t i = start;
+       i < source->items.size() && i - start < static_cast<size_t>(lenD);
+       i++) {
+    out->items.push_back(source->items[i]);
+  }
+  return Value::object(out);
+}
+
 static Value chrNative(int argCount, Value* args) {
   if (argCount != 1 || !args[0].isNumber()) return Value::nil();
   double code = args[0].as.number;
@@ -338,6 +372,8 @@ VM::VM() {
   defineNative("chr", chrNative);
   defineNative("ord", ordNative);
   defineNative("sort", sortNative);
+  defineNative("reverse", reverseNative);
+  defineNative("slice", sliceNative);
   defineNative("split", splitNative);
   defineNative("indexOf", indexOfNative);
   defineNative("min", minNative);
