@@ -103,6 +103,33 @@ static Value indexOfNative(int argCount, Value* args) {
   return Value::number(static_cast<double>(at));
 }
 
+static Value replaceNative(int argCount, Value* args) {
+  if (argCount != 3 || !args[0].isString() || !args[1].isString() ||
+      !args[2].isString()) {
+    return Value::nil();
+  }
+  const std::string& s = asString(args[0])->chars;
+  const std::string& from = asString(args[1])->chars;
+  const std::string& to = asString(args[2])->chars;
+  if (from.empty()) return Value::nil();
+
+  // Left-to-right, non-overlapping; scanning resumes after each insertion so
+  // a replacement containing `from` can't loop forever.
+  std::string out;
+  size_t start = 0;
+  for (;;) {
+    size_t at = s.find(from, start);
+    if (at == std::string::npos) {
+      out += s.substr(start);
+      break;
+    }
+    out += s.substr(start, at - start);
+    out += to;
+    start = at + from.size();
+  }
+  return Value::object(copyString(out));
+}
+
 static Value sortNative(int argCount, Value* args) {
   if (argCount != 1 || !args[0].isArray()) return Value::nil();
   ObjArray* array = asArray(args[0]);
@@ -340,6 +367,7 @@ VM::VM() {
   defineNative("sort", sortNative);
   defineNative("split", splitNative);
   defineNative("indexOf", indexOfNative);
+  defineNative("replace", replaceNative);
   defineNative("min", minNative);
   defineNative("max", maxNative);
 }
