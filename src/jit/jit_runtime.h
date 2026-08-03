@@ -34,6 +34,7 @@ struct JitRuntime {
   static void setUpvalue(VM* vm, int slot);
   static void closeUpvalue(VM* vm);
   static void arrayOp(VM* vm, int count);
+  static void dup2(VM* vm);
   static int indexGetOp(VM* vm, int bcOffset);
   static int indexSetOp(VM* vm, int bcOffset);
 };
@@ -63,6 +64,7 @@ void ember_jit_get_upvalue(VM* vm, int slot);
 void ember_jit_set_upvalue(VM* vm, int slot);
 void ember_jit_close_upvalue(VM* vm);
 void ember_jit_array(VM* vm, int count);
+void ember_jit_dup2(VM* vm);
 int ember_jit_index_get(VM* vm, int bcOffset);
 int ember_jit_index_set(VM* vm, int bcOffset);
 }

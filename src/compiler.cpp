@@ -652,6 +652,27 @@ class Compiler {
     if (canAssign && match(TOKEN_EQUAL)) {
       expression();
       emitByte(OP_INDEX_SET);
+    } else if (canAssign &&
+               (check(TOKEN_PLUS_EQUAL) || check(TOKEN_MINUS_EQUAL) ||
+                check(TOKEN_STAR_EQUAL) || check(TOKEN_SLASH_EQUAL) ||
+                check(TOKEN_PERCENT_EQUAL))) {
+      // Desugar `a[i] op= e` into a read-modify-write against the same
+      // array and index, both evaluated once:
+      //   [a, i] --DUP2--> [a, i, a, i] --GET--> [a, i, old]
+      //   --e, op--> [a, i, new] --SET--> [new]
+      TokenType op = current_.type;
+      advance();  // consume the compound operator
+      emitByte(OP_DUP2);
+      emitByte(OP_INDEX_GET);
+      expression();
+      switch (op) {
+        case TOKEN_PLUS_EQUAL: emitByte(OP_ADD); break;
+        case TOKEN_MINUS_EQUAL: emitByte(OP_SUBTRACT); break;
+        case TOKEN_STAR_EQUAL: emitByte(OP_MULTIPLY); break;
+        case TOKEN_SLASH_EQUAL: emitByte(OP_DIVIDE); break;
+        default: emitByte(OP_MODULO); break;
+      }
+      emitByte(OP_INDEX_SET);
     } else {
       emitByte(OP_INDEX_GET);
     }

@@ -673,10 +673,10 @@ InterpretResult VM::run(int stopDepth) {
       &&lbl_OP_JUMP_IF_FALSE, &&lbl_OP_LOOP,          &&lbl_OP_CALL,
       &&lbl_OP_CLOSURE,       &&lbl_OP_CLOSE_UPVALUE, &&lbl_OP_RETURN,
       &&lbl_OP_CONSTANT_LONG, &&lbl_OP_ARRAY,         &&lbl_OP_INDEX_GET,
-      &&lbl_OP_INDEX_SET,
+      &&lbl_OP_INDEX_SET,     &&lbl_OP_DUP2,
   };
   static_assert(sizeof(kDispatchTable) / sizeof(kDispatchTable[0]) ==
-                    OP_INDEX_SET + 1,
+                    OP_DUP2 + 1,
                 "dispatch table must cover every opcode");
   VM_NEXT();  // dispatch the first instruction
 #else
@@ -888,6 +888,12 @@ InterpretResult VM::run(int stopDepth) {
         VM_NEXT();
       VM_CASE(OP_INDEX_SET):
         if (!indexSet()) return InterpretResult::RUNTIME_ERROR;
+        VM_NEXT();
+      VM_CASE(OP_DUP2):
+        // After the first push, the original second-from-top is again at
+        // distance 1, so the same peek works twice.
+        push(peek(1));
+        push(peek(1));
         VM_NEXT();
       VM_CASE(OP_CLOSE_UPVALUE):
         closeUpvalues(stackTop_ - 1);

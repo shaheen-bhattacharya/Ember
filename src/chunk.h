@@ -41,6 +41,7 @@ enum OpCode : uint8_t {
   OP_ARRAY,          // operand: element count -> pop N elements, push array
   OP_INDEX_GET,      // pop index + target, push element (array or string)
   OP_INDEX_SET,      // pop value + index + array, set, push value
+  OP_DUP2,           // duplicate the top two stack slots: [a, b] -> [a, b, a, b]
 };
 
 // A chunk of bytecode plus its constant pool and line info (parallel to code,

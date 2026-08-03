@@ -231,6 +231,11 @@ void JitRuntime::closeUpvalue(VM* vm) {
 
 void JitRuntime::arrayOp(VM* vm, int count) { vm->makeArray(count); }
 
+void JitRuntime::dup2(VM* vm) {
+  push(vm, peek(vm, 1));
+  push(vm, peek(vm, 1));
+}
+
 int JitRuntime::indexGetOp(VM* vm, int bcOffset) {
   syncIp(vm, bcOffset);
   return vm->indexGet() ? 1 : 0;
@@ -284,6 +289,7 @@ void ember_jit_set_upvalue(VM* vm, int slot) {
 }
 void ember_jit_close_upvalue(VM* vm) { JitRuntime::closeUpvalue(vm); }
 void ember_jit_array(VM* vm, int count) { JitRuntime::arrayOp(vm, count); }
+void ember_jit_dup2(VM* vm) { JitRuntime::dup2(vm); }
 int ember_jit_index_get(VM* vm, int bcOffset) {
   return JitRuntime::indexGetOp(vm, bcOffset);
 }
