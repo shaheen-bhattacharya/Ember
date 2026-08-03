@@ -130,6 +130,22 @@ static Value sortNative(int argCount, Value* args) {
   return args[0];  // the array itself, for chaining
 }
 
+static Value repeatNative(int argCount, Value* args) {
+  if (argCount != 2 || !args[0].isString() || !args[1].isNumber()) {
+    return Value::nil();
+  }
+  double countD = args[1].as.number;
+  if (countD < 0 || countD != floor(countD)) return Value::nil();
+  const std::string& s = asString(args[0])->chars;
+  // Cap the result so repeat("x", 1e9) can't silently eat the heap.
+  if (s.size() * countD > 1e6) return Value::nil();
+  size_t count = static_cast<size_t>(countD);
+  std::string out;
+  out.reserve(s.size() * count);
+  for (size_t i = 0; i < count; i++) out += s;
+  return Value::object(copyString(out));
+}
+
 static Value chrNative(int argCount, Value* args) {
   if (argCount != 1 || !args[0].isNumber()) return Value::nil();
   double code = args[0].as.number;
@@ -335,6 +351,7 @@ VM::VM() {
   defineNative("pop", popNative);
   defineNative("range", rangeNative);
   defineNative("join", joinNative);
+  defineNative("repeat", repeatNative);
   defineNative("chr", chrNative);
   defineNative("ord", ordNative);
   defineNative("sort", sortNative);
