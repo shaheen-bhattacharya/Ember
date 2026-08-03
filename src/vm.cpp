@@ -41,6 +41,24 @@ static Value sqrtNative(int argCount, Value* args) {
   return Value::number(sqrt(args[0].as.number));
 }
 
+static Value powNative(int argCount, Value* args) {
+  if (argCount != 2 || !args[0].isNumber() || !args[1].isNumber()) {
+    return Value::nil();
+  }
+  return Value::number(pow(args[0].as.number, args[1].as.number));
+}
+
+static Value expNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isNumber()) return Value::nil();
+  return Value::number(exp(args[0].as.number));
+}
+
+static Value logNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isNumber()) return Value::nil();
+  if (args[0].as.number <= 0) return Value::nil();
+  return Value::number(log(args[0].as.number));
+}
+
 static Value absNative(int argCount, Value* args) {
   if (argCount != 1 || !args[0].isNumber()) return Value::nil();
   return Value::number(fabs(args[0].as.number));
@@ -322,6 +340,9 @@ VM::VM() {
   defineNative("clock", clockNative);
   defineNative("str", strNative);
   defineNative("sqrt", sqrtNative);
+  defineNative("pow", powNative);
+  defineNative("exp", expNative);
+  defineNative("log", logNative);
   defineNative("abs", absNative);
   defineNative("floor", floorNative);
   defineNative("ceil", ceilNative);
