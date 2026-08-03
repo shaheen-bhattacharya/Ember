@@ -15,3 +15,18 @@ print 1_000_000;        // expect: 1000000
 print 1_000 + 1;        // expect: 1001
 print 3.141_59;         // expect: 3.14159
 print 1_2_3;            // expect: 123
+
+// Exponent literals.
+print 1e3;              // expect: 1000
+print 2.5e2;            // expect: 250
+print 1e-2;             // expect: 0.01
+print 1E+3;             // expect: 1000
+print 5e0;              // expect: 5
+print 1e3 == 1000;      // expect: true
+print 1_000e1;          // expect: 10000
+print 1e3 + 1e-3;       // expect: 1000.001
+
+// An `e` with no digits after it is not an exponent: `e3` here is a
+// variable, not part of the literal.
+var e3 = 7;
+print 1 + e3;           // expect: 8
