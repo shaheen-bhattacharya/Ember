@@ -10,6 +10,7 @@ native library.
 | [`sort.em`](sort.em) | In-place quicksort with a partition helper, a deterministic LCG input generator, and a sortedness check — recursion over array slices |
 | [`wordfreq.em`](wordfreq.em) | Word frequency counting via `split` → `sort` → run-length counting — the string/array toolkit end to end |
 | [`nqueens.em`](nqueens.em) | N-Queens backtracking — an array as an explicit stack of column choices, diagonal math with `abs`, counts checked against the known sequence |
+| [`cipher.em`](cipher.em) | Caesar cipher encode/decode/crack — `chr`/`ord` arithmetic, ROT13 round-trip, and a frequency-scored brute-force that recovers the shift |
 
 Run any of them with:
 
