@@ -244,17 +244,25 @@ static Value trimNative(int argCount, Value* args) {
 }
 
 static Value minNative(int argCount, Value* args) {
-  if (argCount != 2 || !args[0].isNumber() || !args[1].isNumber()) {
-    return Value::nil();
+  // Variadic: min(a, b, c, ...). All arguments must be numbers.
+  if (argCount < 1) return Value::nil();
+  double best = 0;
+  for (int i = 0; i < argCount; i++) {
+    if (!args[i].isNumber()) return Value::nil();
+    if (i == 0 || args[i].as.number < best) best = args[i].as.number;
   }
-  return Value::number(fmin(args[0].as.number, args[1].as.number));
+  return Value::number(best);
 }
 
 static Value maxNative(int argCount, Value* args) {
-  if (argCount != 2 || !args[0].isNumber() || !args[1].isNumber()) {
-    return Value::nil();
+  // Variadic: max(a, b, c, ...). All arguments must be numbers.
+  if (argCount < 1) return Value::nil();
+  double best = 0;
+  for (int i = 0; i < argCount; i++) {
+    if (!args[i].isNumber()) return Value::nil();
+    if (i == 0 || args[i].as.number > best) best = args[i].as.number;
   }
-  return Value::number(fmax(args[0].as.number, args[1].as.number));
+  return Value::number(best);
 }
 
 // ---- profiling helpers ----
