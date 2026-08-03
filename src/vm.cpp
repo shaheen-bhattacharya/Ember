@@ -190,6 +190,38 @@ static Value popNative(int argCount, Value* args) {
   return last;
 }
 
+static Value insertNative(int argCount, Value* args) {
+  if (argCount != 3 || !args[0].isArray() || !args[1].isNumber()) {
+    return Value::nil();
+  }
+  ObjArray* array = asArray(args[0]);
+  double atD = args[1].as.number;
+  // Valid positions run 0..len inclusive: len appends, like push.
+  if (atD < 0 || atD > static_cast<double>(array->items.size()) ||
+      atD != floor(atD)) {
+    return Value::nil();
+  }
+  array->items.insert(array->items.begin() + static_cast<size_t>(atD),
+                      args[2]);
+  return args[0];  // the array itself, for chaining
+}
+
+static Value removeAtNative(int argCount, Value* args) {
+  if (argCount != 2 || !args[0].isArray() || !args[1].isNumber()) {
+    return Value::nil();
+  }
+  ObjArray* array = asArray(args[0]);
+  double atD = args[1].as.number;
+  if (atD < 0 || atD >= static_cast<double>(array->items.size()) ||
+      atD != floor(atD)) {
+    return Value::nil();
+  }
+  size_t at = static_cast<size_t>(atD);
+  Value removed = array->items[at];
+  array->items.erase(array->items.begin() + at);
+  return removed;
+}
+
 static Value floorNative(int argCount, Value* args) {
   if (argCount != 1 || !args[0].isNumber()) return Value::nil();
   return Value::number(floor(args[0].as.number));
@@ -333,6 +365,8 @@ VM::VM() {
   defineNative("trim", trimNative);
   defineNative("push", pushNative);
   defineNative("pop", popNative);
+  defineNative("insert", insertNative);
+  defineNative("removeAt", removeAtNative);
   defineNative("range", rangeNative);
   defineNative("join", joinNative);
   defineNative("chr", chrNative);
