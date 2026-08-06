@@ -243,6 +243,34 @@ static Value trimNative(int argCount, Value* args) {
   return Value::object(copyString(s.substr(begin, end - begin)));
 }
 
+static Value containsNative(int argCount, Value* args) {
+  if (argCount != 2 || !args[0].isString() || !args[1].isString()) {
+    return Value::nil();
+  }
+  return Value::boolean(asString(args[0])->chars.find(
+                            asString(args[1])->chars) != std::string::npos);
+}
+
+static Value startsWithNative(int argCount, Value* args) {
+  if (argCount != 2 || !args[0].isString() || !args[1].isString()) {
+    return Value::nil();
+  }
+  const std::string& s = asString(args[0])->chars;
+  const std::string& prefix = asString(args[1])->chars;
+  return Value::boolean(s.compare(0, prefix.size(), prefix) == 0);
+}
+
+static Value endsWithNative(int argCount, Value* args) {
+  if (argCount != 2 || !args[0].isString() || !args[1].isString()) {
+    return Value::nil();
+  }
+  const std::string& s = asString(args[0])->chars;
+  const std::string& suffix = asString(args[1])->chars;
+  if (suffix.size() > s.size()) return Value::boolean(false);
+  return Value::boolean(
+      s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0);
+}
+
 static Value minNative(int argCount, Value* args) {
   if (argCount != 2 || !args[0].isNumber() || !args[1].isNumber()) {
     return Value::nil();
@@ -331,6 +359,9 @@ VM::VM() {
   defineNative("upper", upperNative);
   defineNative("lower", lowerNative);
   defineNative("trim", trimNative);
+  defineNative("contains", containsNative);
+  defineNative("startsWith", startsWithNative);
+  defineNative("endsWith", endsWithNative);
   defineNative("push", pushNative);
   defineNative("pop", popNative);
   defineNative("range", rangeNative);
