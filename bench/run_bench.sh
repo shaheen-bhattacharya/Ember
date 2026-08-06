@@ -27,6 +27,7 @@ best_of_3() {  # $1 = EMBER_JIT value, $2 = file; echoes best elapsed_s
   echo "$best"
 }
 
+speedups=""
 for file in "$DIR"/*.em; do
   name="$(basename "$file")"
   echo "== $name =="
@@ -37,5 +38,17 @@ for file in "$DIR"/*.em; do
   if [ -n "$jit" ] && [ -n "$interp" ]; then
     printf "  interp: %ss\n  jit:    %ss\n" "$interp" "$jit"
     awk "BEGIN{printf \"  speedup: %.2fx\n\", $interp / $jit}"
+    speedups="$speedups $(awk "BEGIN{print $interp / $jit}")"
   fi
 done
+
+# Geometric mean: the honest average for ratios (a 4x win and a 1x wash
+# should not average to 2.5x).
+if [ -n "$speedups" ]; then
+  echo "$speedups" | awk '{
+    product = 1
+    for (i = 1; i <= NF; i++) product *= $i
+    printf "== overall: %.2fx geometric mean over %d benchmarks ==\n",
+           product ^ (1 / NF), NF
+  }'
+fi
