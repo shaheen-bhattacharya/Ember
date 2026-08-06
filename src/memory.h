@@ -44,6 +44,13 @@ class Heap {
   void markValue(const Value& value);
   void markObject(Obj* object);
   void freeObjects();
+
+  // Charges out-of-line storage (string chars, array items) to the GC
+  // budget; sweep subtracts gcSize, so the books stay balanced.
+  void chargeExtra(Obj* object, size_t bytes) {
+    object->gcSize += bytes;
+    bytesAllocated += bytes;
+  }
 };
 
 extern Heap gHeap;

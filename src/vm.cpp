@@ -90,6 +90,7 @@ static Value splitNative(int argCount, Value* args) {
         Value::object(copyString(s.substr(start, at - start))));
     start = at + sep.size();
   }
+  gHeap.chargeExtra(array, array->items.size() * sizeof(Value));
   gHeap.gcEnabled = gcWasEnabled;
   return Value::object(array);
 }
@@ -164,6 +165,7 @@ static Value rangeNative(int argCount, Value* args) {
   for (double v = start; v < stop; v += 1) {
     array->items.push_back(Value::number(v));
   }
+  gHeap.chargeExtra(array, array->items.size() * sizeof(Value));
   return Value::object(array);
 }
 
@@ -475,6 +477,7 @@ void VM::makeArray(int count) {
   // Elements stay rooted on the stack across the allocation.
   ObjArray* array = gHeap.allocate<ObjArray>();
   array->items.assign(stackTop_ - count, stackTop_);
+  gHeap.chargeExtra(array, array->items.size() * sizeof(Value));
   stackTop_ -= count;
   push(Value::object(array));
 }
