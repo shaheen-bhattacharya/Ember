@@ -479,17 +479,27 @@ void VM::makeArray(int count) {
   push(Value::object(array));
 }
 
+// Maps an index value onto a container of `size` elements. Negative indexes
+// count from the end (-1 is the last element), Python-style. Answers -1 for
+// fractional, NaN, or out-of-range indexes.
+static ptrdiff_t resolveIndex(double indexNum, size_t size) {
+  if (indexNum != floor(indexNum)) return -1;  // fractional or NaN
+  double resolved =
+      indexNum < 0 ? indexNum + static_cast<double>(size) : indexNum;
+  if (resolved < 0 || resolved >= static_cast<double>(size)) return -1;
+  return static_cast<ptrdiff_t>(resolved);
+}
+
 bool VM::indexGet() {
   if (!peek(0).isNumber()) {
     runtimeError("Index must be a number.");
     return false;
   }
   double indexNum = peek(0).as.number;
-  size_t index = static_cast<size_t>(indexNum);
   if (peek(1).isArray()) {
     ObjArray* array = asArray(peek(1));
-    if (indexNum < 0 || static_cast<double>(index) != indexNum ||
-        index >= array->items.size()) {
+    ptrdiff_t index = resolveIndex(indexNum, array->items.size());
+    if (index < 0) {
       runtimeError("Array index out of range.");
       return false;
     }
@@ -500,8 +510,8 @@ bool VM::indexGet() {
   }
   if (peek(1).isString()) {
     ObjString* string = asString(peek(1));
-    if (indexNum < 0 || static_cast<double>(index) != indexNum ||
-        index >= string->chars.size()) {
+    ptrdiff_t index = resolveIndex(indexNum, string->chars.size());
+    if (index < 0) {
       runtimeError("String index out of range.");
       return false;
     }
@@ -526,10 +536,8 @@ bool VM::indexSet() {
     return false;
   }
   ObjArray* array = asArray(peek(2));
-  double indexNum = peek(1).as.number;
-  size_t index = static_cast<size_t>(indexNum);
-  if (indexNum < 0 || static_cast<double>(index) != indexNum ||
-      index >= array->items.size()) {
+  ptrdiff_t index = resolveIndex(peek(1).as.number, array->items.size());
+  if (index < 0) {
     runtimeError("Array index out of range.");
     return false;
   }
