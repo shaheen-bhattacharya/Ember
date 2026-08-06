@@ -10,6 +10,7 @@ native library.
 | [`sort.em`](sort.em) | In-place quicksort with a partition helper, a deterministic LCG input generator, and a sortedness check — recursion over array slices |
 | [`wordfreq.em`](wordfreq.em) | Word frequency counting via `split` → `sort` → run-length counting — the string/array toolkit end to end |
 | [`nqueens.em`](nqueens.em) | N-Queens backtracking — an array as an explicit stack of column choices, diagonal math with `abs`, counts checked against the known sequence |
+| [`hanoi.em`](hanoi.em) | Towers of Hanoi with simulated pegs — arrays as stacks, per-move legality checks, and the 2^n − 1 move count verified for n=16 |
 
 Run any of them with:
 
