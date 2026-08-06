@@ -64,7 +64,7 @@ source ──lexer──> tokens ──compiler (Pratt)──> bytecode chunks �
 | Profiler | `src/profile.cpp` | Hotness, type feedback, call-site caches; powers `EMBER_PROFILE` |
 | Baseline JIT | `src/jit/` | AArch64 template compiler, W^X code buffers, runtime helpers |
 
-Design details and the rationale for each decision are in [docs/DESIGN.md](docs/DESIGN.md).
+Design details and the rationale for each decision are in [docs/DESIGN.md](docs/DESIGN.md); build/test workflow and recipes for common changes are in [docs/HACKING.md](docs/HACKING.md).
 
 ## Roadmap
 
