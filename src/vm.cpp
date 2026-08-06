@@ -319,6 +319,13 @@ VM::VM() {
   logHot_ = getenv("EMBER_LOG_HOT") != nullptr;
   gHeap.logGC = getenv("EMBER_LOG_GC") != nullptr;
   gHeap.stressGC = getenv("EMBER_GC_STRESS") != nullptr;
+  if (const char* heapKb = getenv("EMBER_GC_HEAP_KB")) {
+    long kb = strtol(heapKb, nullptr, 10);
+    if (kb >= 1) {
+      gHeap.minHeap = static_cast<size_t>(kb) * 1024;
+      gHeap.nextGC = gHeap.minHeap;
+    }
+  }
   defineNative("clock", clockNative);
   defineNative("str", strNative);
   defineNative("sqrt", sqrtNative);

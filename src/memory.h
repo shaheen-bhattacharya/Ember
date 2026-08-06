@@ -19,6 +19,7 @@ class Heap {
   Obj* objects = nullptr;
   std::unordered_map<std::string, ObjString*> strings;  // intern table (weak)
   size_t bytesAllocated = 0;
+  size_t minHeap = 1024 * 1024;  // floor for nextGC; EMBER_GC_HEAP_KB overrides
   size_t nextGC = 1024 * 1024;
   VM* vm = nullptr;
   bool gcEnabled = false;
