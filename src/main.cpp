@@ -24,6 +24,42 @@ static std::string readFile(const char* path) {
   return buffer.str();
 }
 
+// True while `source` can't be complete yet: an unclosed (, {, or [, an
+// unterminated string, or an open block comment. A quick hand scan (not the
+// lexer) because half-typed input isn't tokenizable.
+static bool needsMoreInput(const std::string& source) {
+  int depth = 0;
+  int comment = 0;  // block comments nest
+  bool inString = false;
+  for (size_t i = 0; i < source.size(); i++) {
+    char c = source[i];
+    if (inString) {
+      if (c == '\\') i++;  // skip the escaped character
+      else if (c == '"') inString = false;
+    } else if (comment > 0) {
+      if (c == '/' && i + 1 < source.size() && source[i + 1] == '*') {
+        comment++;
+        i++;
+      } else if (c == '*' && i + 1 < source.size() && source[i + 1] == '/') {
+        comment--;
+        i++;
+      }
+    } else if (c == '/' && i + 1 < source.size() && source[i + 1] == '/') {
+      while (i < source.size() && source[i] != '\n') i++;
+    } else if (c == '/' && i + 1 < source.size() && source[i + 1] == '*') {
+      comment = 1;
+      i++;
+    } else if (c == '"') {
+      inString = true;
+    } else if (c == '(' || c == '{' || c == '[') {
+      depth++;
+    } else if (c == ')' || c == '}' || c == ']') {
+      depth--;  // over-closing goes negative: let the compiler report it
+    }
+  }
+  return depth > 0 || comment > 0 || inString;
+}
+
 static void repl(VM& vm) {
   std::string line;
   printf("ember " EMBER_VERSION " — type an expression to see its value. "
@@ -34,13 +70,21 @@ static void repl(VM& vm) {
       printf("\n");
       break;
     }
-    // If the line parses as a bare expression, echo its value; otherwise run
-    // it as a statement. The probe compile is silent.
-    std::string wrapped = "print (" + line + ");";
+    // Keep reading while delimiters are open, so blocks can be typed across
+    // lines. EOF mid-buffer runs what's there, then exits on the next loop.
+    std::string source = line;
+    while (needsMoreInput(source)) {
+      printf(". ");
+      if (!std::getline(std::cin, line)) break;
+      source += "\n" + line;
+    }
+    // If the input parses as a bare expression, echo its value; otherwise
+    // run it as a statement. The probe compile is silent.
+    std::string wrapped = "print (" + source + ");";
     if (compileSource(wrapped, /*quietErrors=*/true) != nullptr) {
       vm.interpret(wrapped);
     } else {
-      vm.interpret(line);
+      vm.interpret(source);
     }
   }
 }
