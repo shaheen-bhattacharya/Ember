@@ -1,5 +1,6 @@
 #include "jit_compile.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 
@@ -158,7 +159,7 @@ class TemplateCompiler {
     const std::vector<uint8_t>& code = chunk_.code;
     if (static_cast<size_t>(off) + 4 >= code.size()) return false;
     uint8_t op = code[off];
-    if (op != OP_LESS && op != OP_GREATER) return false;
+    if (op != OP_LESS && op != OP_GREATER && op != OP_EQUAL) return false;
     if (code[off + 1] != OP_JUMP_IF_FALSE || code[off + 4] != OP_POP) {
       return false;
     }
@@ -327,12 +328,22 @@ class TemplateCompiler {
     a_.fcmpD(0, 1);
     a_.subImm(0, 0, 32);  // pop both operands
     a_.strX(0, kTopAddr, 0);
-    // Branch when the comparison is false; PL/LE also cover unordered (NaN
-    // compares false), matching interpreter truthiness.
-    a_.bCond(op == OP_LESS ? a64::PL : a64::LE, taken);
+    // Branch when the comparison is false; the inverted conditions also
+    // cover unordered (NaN compares false, and NaN == NaN is false),
+    // matching interpreter truthiness.
+    a64::Cond whenFalse = op == OP_LESS      ? a64::PL
+                          : op == OP_GREATER ? a64::LE
+                                             : a64::NE;
+    a_.bCond(whenFalse, taken);
     a_.b(fall);
     a_.bind(slow);
-    emitHelper3Checked(reinterpret_cast<void*>(ember_jit_binary), op, offset);
+    if (op == OP_EQUAL) {
+      // Non-number equality is infallible; the helper pushes the boolean.
+      emitHelper1(reinterpret_cast<void*>(ember_jit_equal));
+    } else {
+      emitHelper3Checked(reinterpret_cast<void*>(ember_jit_binary), op,
+                         offset);
+    }
     // The helper pushed the boolean; pop it and branch on the payload.
     a_.ldrX(0, kTopAddr, 0);
     a_.ldurbW(2, 0, -8);
@@ -448,20 +459,36 @@ class TemplateCompiler {
       case OP_DIVIDE:
         emitArithmetic(op, offset);
         return offset + 1;
-      case OP_MODULO:
+      case OP_MODULO: {
+        // Number fast path calls fmod directly (d0/d1 are already the
+        // argument registers); the full helper stays as the slow path.
+        a64::Label slow, done;
+        emitNumberGuards(slow);
+        a_.movImm64(9, reinterpret_cast<uint64_t>(
+                           static_cast<double (*)(double, double)>(fmod)));
+        a_.blr(9);
+        a_.ldrX(0, kTopAddr, 0);  // reload: fmod clobbers scratch registers
+        a_.sturD(0, 0, -24);
+        emitShrinkOne();
+        a_.b(done);
+        a_.bind(slow);
         emitHelper3Checked(reinterpret_cast<void*>(ember_jit_binary), op,
                            offset);
+        a_.bind(done);
         return offset + 1;
+      }
       case OP_GREATER:
       case OP_LESS:
+      case OP_EQUAL:
         if (fused_.count(offset) != 0) {
           emitFusedCompareBranch(op, offset);
           return offset + 5;
         }
-        emitComparison(op, offset);
-        return offset + 1;
-      case OP_EQUAL:
-        emitHelper1(reinterpret_cast<void*>(ember_jit_equal));
+        if (op == OP_EQUAL) {
+          emitHelper1(reinterpret_cast<void*>(ember_jit_equal));
+        } else {
+          emitComparison(op, offset);
+        }
         return offset + 1;
       case OP_NOT:
         emitNot();
