@@ -392,6 +392,19 @@ void VM::defineNative(const char* name, NativeFn function) {
   globals_[nameStr] = Value::object(native);
 }
 
+void VM::defineScriptArgs(int count, const char* const* values) {
+  // Same rooting hazard as split: the array is unreachable from any GC root
+  // while its element strings are being allocated, so pause collection.
+  bool gcWasEnabled = gHeap.gcEnabled;
+  gHeap.gcEnabled = false;
+  ObjArray* array = gHeap.allocate<ObjArray>();
+  for (int i = 0; i < count; i++) {
+    array->items.push_back(Value::object(copyString(values[i])));
+  }
+  globals_[copyString("args")] = Value::object(array);
+  gHeap.gcEnabled = gcWasEnabled;
+}
+
 void VM::markRoots() {
   for (Value* slot = stack_; slot < stackTop_; slot++) {
     gHeap.markValue(*slot);

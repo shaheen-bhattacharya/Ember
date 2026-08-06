@@ -25,6 +25,9 @@ class VM {
 
   InterpretResult interpret(const std::string& source);
   void markRoots();  // called by the GC
+  // Populates the `args` global with the command-line arguments that
+  // followed the script path (empty for the REPL and -e).
+  void defineScriptArgs(int count, const char* const* values);
 
  private:
   // The baseline JIT's runtime helpers operate directly on VM state.
