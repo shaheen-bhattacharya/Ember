@@ -7,6 +7,8 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <sstream>
 
 #include "compiler.h"
 #include "debug.h"
@@ -29,6 +31,27 @@ static Value clockNative(int, Value*) {
       duration_cast<duration<double>>(steady_clock::now().time_since_epoch())
           .count();
   return Value::number(seconds);
+}
+
+static Value readFileNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isString()) return Value::nil();
+  std::ifstream file(asString(args[0])->chars, std::ios::binary);
+  if (!file) return Value::nil();
+  std::ostringstream buffer;
+  buffer << file.rdbuf();
+  return Value::object(copyString(buffer.str()));
+}
+
+static Value writeFileNative(int argCount, Value* args) {
+  if (argCount != 2 || !args[0].isString() || !args[1].isString()) {
+    return Value::nil();
+  }
+  std::ofstream file(asString(args[0])->chars,
+                     std::ios::binary | std::ios::trunc);
+  if (!file) return Value::boolean(false);
+  file << asString(args[1])->chars;
+  file.flush();
+  return Value::boolean(file.good());
 }
 
 static Value strNative(int argCount, Value* args) {
@@ -320,6 +343,8 @@ VM::VM() {
   gHeap.logGC = getenv("EMBER_LOG_GC") != nullptr;
   gHeap.stressGC = getenv("EMBER_GC_STRESS") != nullptr;
   defineNative("clock", clockNative);
+  defineNative("readFile", readFileNative);
+  defineNative("writeFile", writeFileNative);
   defineNative("str", strNative);
   defineNative("sqrt", sqrtNative);
   defineNative("abs", absNative);
