@@ -1,8 +1,9 @@
 # Ember bytecode reference
 
 Stack-based, one-byte opcodes, operands inline in the code stream. Constants
-live in a per-chunk pool (max 256 entries). Jumps use unsigned 16-bit
-big-endian offsets relative to the instruction after the operand. Use
+live in a per-chunk pool; opcodes with a one-byte operand reach the first 256
+entries, and literals past that use `OP_CONSTANT_LONG`. Jumps use unsigned
+16-bit big-endian offsets relative to the instruction after the operand. Use
 `./ember --dump file.em` to see any script's compiled form.
 
 | Opcode | Operands | Stack effect | Notes |
@@ -31,6 +32,10 @@ big-endian offsets relative to the instruction after the operand. Use
 | `OP_CLOSURE` | fn pool index, then (isLocal, index) per upvalue | push | wraps a function with its captures |
 | `OP_CLOSE_UPVALUE` | — | pop | hoists the captured top-of-stack local to the heap |
 | `OP_RETURN` | — | pop result; unwind frame | closes the frame's open upvalues |
+| `OP_CONSTANT_LONG` | 16-bit pool index | push | for pools past 256 entries |
+| `OP_ARRAY` | element count | pop N, push array | elements were pushed left to right |
+| `OP_INDEX_GET` | — | pop index + target, push element | arrays and strings |
+| `OP_INDEX_SET` | — | pop value + index + array, push value | assignment is an expression |
 
 `>=`, `<=`, and `!=` have no opcodes: the compiler emits `OP_LESS`+`OP_NOT`,
 `OP_GREATER`+`OP_NOT`, and `OP_EQUAL`+`OP_NOT` respectively. `and`/`or` compile

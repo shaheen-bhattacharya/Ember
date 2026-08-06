@@ -57,7 +57,7 @@ source ──lexer──> tokens ──compiler (Pratt)──> bytecode chunks �
 |---|---|---|
 | Lexer | `src/lexer.cpp` | On-demand tokenizer, zero-copy tokens into source |
 | Compiler | `src/compiler.cpp` | Single-pass Pratt parser emitting bytecode directly |
-| Bytecode | `src/chunk.h` | 31 opcodes, 16-bit jump offsets, per-byte line info |
+| Bytecode | `src/chunk.h` | 34 opcodes, 16-bit jump offsets, per-byte line info |
 | VM | `src/vm.cpp` | Stack machine, call frames as stack windows |
 | GC | `src/memory.cpp` | Mark-sweep; roots = VM stack, frames, globals; weak intern table |
 | Disassembler | `src/debug.cpp` | Powers `--dump` and `EMBER_TRACE` |
