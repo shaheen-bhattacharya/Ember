@@ -22,6 +22,8 @@ jobs:
         run: EMBER_JIT=0 ./tests/run_tests.sh
       - name: Test under GC stress, JIT forced hot
         run: EMBER_GC_STRESS=1 EMBER_JIT_THRESHOLD=1 ./tests/run_tests.sh
+      - name: Smoke-run samples
+        run: ./samples/run_samples.sh
 
   asan:
     runs-on: macos-latest
