@@ -13,7 +13,13 @@ repl: ember
 	./ember
 
 build/%.o: src/%.cpp | build
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -MJ $@.json -c $< -o $@
+
+# Compilation database for clangd/IDEs, assembled from the -MJ fragments the
+# build already emits.
+compile_commands.json: $(OBJ)
+	@sed -e '1s/^/[\n/' -e '$$s/,$$/\n]/' $(OBJ:%=%.json) > $@
+	@echo "wrote $@"
 
 # Compiler-generated header dependencies: touching one header only rebuilds
 # the objects that actually include it.
@@ -37,4 +43,5 @@ profile: ember
 clean:
 	rm -rf build ember
 
-.PHONY: all repl debug test bench profile clean
+.PHONY: all repl debug test bench profile clean cdb
+cdb: compile_commands.json
