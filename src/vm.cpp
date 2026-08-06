@@ -58,6 +58,21 @@ static Value lenNative(int argCount, Value* args) {
   return Value::nil();
 }
 
+static Value envNative(int argCount, Value* args) {
+  if (argCount != 1 || !args[0].isString()) return Value::nil();
+  const char* value = getenv(asString(args[0])->chars.c_str());
+  if (value == nullptr) return Value::nil();
+  return Value::object(copyString(value));
+}
+
+static Value exitNative(int argCount, Value* args) {
+  int code = 0;
+  if (argCount >= 1 && args[0].isNumber()) {
+    code = static_cast<int>(args[0].as.number);
+  }
+  exit(code);
+}
+
 static Value pushNative(int argCount, Value* args) {
   if (argCount != 2 || !args[0].isArray()) return Value::nil();
   ObjArray* array = asArray(args[0]);
@@ -327,6 +342,8 @@ VM::VM() {
   defineNative("ceil", ceilNative);
   defineNative("round", roundNative);
   defineNative("len", lenNative);
+  defineNative("env", envNative);
+  defineNative("exit", exitNative);
   defineNative("substr", substrNative);
   defineNative("upper", upperNative);
   defineNative("lower", lowerNative);
