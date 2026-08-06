@@ -143,6 +143,7 @@ class TemplateCompiler {
       case OP_CLOSE_UPVALUE:
       case OP_INDEX_GET:
       case OP_INDEX_SET:
+      case OP_DUP2:
         return 1;
       default:
         return -1;
@@ -549,6 +550,9 @@ class TemplateCompiler {
       case OP_INDEX_SET:
         emitHelper2Checked(reinterpret_cast<void*>(ember_jit_index_set),
                            offset);
+        return offset + 1;
+      case OP_DUP2:
+        emitHelper1(reinterpret_cast<void*>(ember_jit_dup2));
         return offset + 1;
       case OP_JUMP: {
         a_.b(targets_[offset + 3 + read16(offset + 1)]);
