@@ -26,6 +26,7 @@ Dynamic typing over four value kinds (`nil`, booleans, 64-bit float numbers, hea
 ```sh
 make            # builds ./ember (clang++, -O2)
 make test       # runs the golden-output test suite in tests/
+make stress     # the CI test matrix locally: forced-JIT, interpreter, GC-stress
 make bench      # runs each benchmark in bench/ three times
 make debug      # ASan + -O0 build for hacking on the VM
 

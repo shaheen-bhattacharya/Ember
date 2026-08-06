@@ -28,6 +28,14 @@ debug: clean ember
 test: ember
 	./tests/run_tests.sh
 
+# The CI test matrix, locally: default tiering, everything forced hot,
+# interpreter only, and GC collecting on every allocation.
+stress: ember
+	./tests/run_tests.sh
+	EMBER_JIT_THRESHOLD=1 ./tests/run_tests.sh
+	EMBER_JIT=0 ./tests/run_tests.sh
+	EMBER_GC_STRESS=1 EMBER_JIT_THRESHOLD=1 ./tests/run_tests.sh
+
 bench: ember
 	./bench/run_bench.sh
 
@@ -37,4 +45,4 @@ profile: ember
 clean:
 	rm -rf build ember
 
-.PHONY: all repl debug test bench profile clean
+.PHONY: all repl debug test stress bench profile clean
