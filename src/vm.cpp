@@ -673,10 +673,10 @@ InterpretResult VM::run(int stopDepth) {
       &&lbl_OP_JUMP_IF_FALSE, &&lbl_OP_LOOP,          &&lbl_OP_CALL,
       &&lbl_OP_CLOSURE,       &&lbl_OP_CLOSE_UPVALUE, &&lbl_OP_RETURN,
       &&lbl_OP_CONSTANT_LONG, &&lbl_OP_ARRAY,         &&lbl_OP_INDEX_GET,
-      &&lbl_OP_INDEX_SET,
+      &&lbl_OP_INDEX_SET,     &&lbl_OP_SET_LOCAL_POP,
   };
   static_assert(sizeof(kDispatchTable) / sizeof(kDispatchTable[0]) ==
-                    OP_INDEX_SET + 1,
+                    OP_SET_LOCAL_POP + 1,
                 "dispatch table must cover every opcode");
   VM_NEXT();  // dispatch the first instruction
 #else
@@ -713,6 +713,11 @@ InterpretResult VM::run(int stopDepth) {
       VM_CASE(OP_SET_LOCAL): {
         uint8_t slot = READ_BYTE();
         frame->slots[slot] = peek(0);
+      }
+        VM_NEXT();
+      VM_CASE(OP_SET_LOCAL_POP): {
+        uint8_t slot = READ_BYTE();
+        frame->slots[slot] = pop();
       }
         VM_NEXT();
       VM_CASE(OP_GET_GLOBAL): {

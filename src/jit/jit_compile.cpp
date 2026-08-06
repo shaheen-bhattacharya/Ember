@@ -118,6 +118,7 @@ class TemplateCompiler {
       case OP_GET_UPVALUE:
       case OP_SET_UPVALUE:
       case OP_ARRAY:
+      case OP_SET_LOCAL_POP:
         return 2;
       case OP_JUMP:
       case OP_JUMP_IF_FALSE:
@@ -440,6 +441,14 @@ class TemplateCompiler {
         a_.ldpX(2, 3, 0, -16);
         emitSlotAddr(1, code[offset + 1]);
         a_.stpX(2, 3, 1, 0);
+        return offset + 2;
+      }
+      case OP_SET_LOCAL_POP: {
+        a_.ldrX(0, kTopAddr, 0);
+        a_.ldpX(2, 3, 0, -16);
+        emitSlotAddr(1, code[offset + 1]);
+        a_.stpX(2, 3, 1, 0);
+        emitShrinkOne();
         return offset + 2;
       }
       case OP_ADD:
