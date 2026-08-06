@@ -103,6 +103,16 @@ Token Lexer::number() {
       advance();
     }
   }
+  // Exponent suffix: e or E, optional sign, then digits. Only taken when a
+  // digit actually follows, so `1e` stays a number and an identifier.
+  if (peek() == 'e' || peek() == 'E') {
+    size_t skip = 1;
+    if (current_[1] == '+' || current_[1] == '-') skip = 2;
+    if (isDigit(current_[skip])) {
+      current_ += skip;
+      while (isDigit(peek())) advance();
+    }
+  }
   return makeToken(TOKEN_NUMBER);
 }
 
