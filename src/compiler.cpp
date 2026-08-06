@@ -117,6 +117,11 @@ class Compiler {
   TailConst lastConst_;
   TailConst prevConst_;
 
+  // End offset of an OP_SET_LOCAL that is the most recent emission, for the
+  // SET_LOCAL+POP statement fusion. Stale values are harmless: the fusion
+  // only fires when this equals the current code size.
+  int setLocalEnd_ = -1;
+
   Chunk& currentChunk() { return current_fc_->function->chunk; }
 
   // ---- error handling ----
@@ -486,6 +491,9 @@ class Compiler {
     if (canAssign && match(TOKEN_EQUAL)) {
       expression();
       emitBytes(setOp, static_cast<uint8_t>(arg));
+      if (setOp == OP_SET_LOCAL) {
+        setLocalEnd_ = static_cast<int>(currentChunk().code.size());
+      }
     } else if (canAssign && (check(TOKEN_PLUS_EQUAL) || check(TOKEN_MINUS_EQUAL) ||
                              check(TOKEN_STAR_EQUAL) || check(TOKEN_SLASH_EQUAL) ||
                              check(TOKEN_PERCENT_EQUAL))) {
@@ -502,6 +510,9 @@ class Compiler {
         default: emitByte(OP_MODULO); break;
       }
       emitBytes(setOp, static_cast<uint8_t>(arg));
+      if (setOp == OP_SET_LOCAL) {
+        setLocalEnd_ = static_cast<int>(currentChunk().code.size());
+      }
     } else {
       emitBytes(getOp, static_cast<uint8_t>(arg));
     }
@@ -827,10 +838,24 @@ class Compiler {
     defineVariable(global);
   }
 
+  // Emits the statement-discard pop, fusing it into the preceding
+  // OP_SET_LOCAL when that was the last emission. Safe because the pair is
+  // emitted back-to-back: no jump can have been patched to land between them.
+  void emitStatementPop() {
+    Chunk& chunk = currentChunk();
+    if (setLocalEnd_ == static_cast<int>(chunk.code.size()) &&
+        setLocalEnd_ >= 2) {
+      chunk.code[setLocalEnd_ - 2] = OP_SET_LOCAL_POP;
+      setLocalEnd_ = -1;
+      return;
+    }
+    emitByte(OP_POP);
+  }
+
   void expressionStatement() {
     expression();
     consume(TOKEN_SEMICOLON, "Expect ';' after expression.");
-    emitByte(OP_POP);
+    emitStatementPop();
   }
 
   void ifStatement() {
@@ -897,7 +922,7 @@ class Compiler {
       int bodyJump = emitJump(OP_JUMP);
       int incrementStart = static_cast<int>(currentChunk().code.size());
       expression();
-      emitByte(OP_POP);
+      emitStatementPop();
       consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
       emitLoop(loopStart);
       loopStart = incrementStart;

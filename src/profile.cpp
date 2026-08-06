@@ -23,6 +23,7 @@ int instructionLength(const Chunk& chunk, int offset) {
     case OP_SET_UPVALUE:
     case OP_CALL:
     case OP_ARRAY:
+    case OP_SET_LOCAL_POP:
       return 2;
     case OP_JUMP:
     case OP_JUMP_IF_FALSE:
