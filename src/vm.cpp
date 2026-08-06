@@ -257,6 +257,26 @@ static Value maxNative(int argCount, Value* args) {
   return Value::number(fmax(args[0].as.number, args[1].as.number));
 }
 
+static Value typeNative(int argCount, Value* args) {
+  if (argCount != 1) return Value::nil();
+  const char* name = "nil";
+  switch (args[0].type) {
+    case ValueType::NIL: name = "nil"; break;
+    case ValueType::BOOL: name = "boolean"; break;
+    case ValueType::NUMBER: name = "number"; break;
+    case ValueType::OBJ:
+      switch (args[0].as.obj->type) {
+        case ObjType::STRING: name = "string"; break;
+        case ObjType::ARRAY: name = "array"; break;
+        // Closures, bare functions, and natives are all just callables to
+        // the language; the distinction is a VM implementation detail.
+        default: name = "function"; break;
+      }
+      break;
+  }
+  return Value::object(copyString(name));
+}
+
 // ---- profiling helpers ----
 
 static inline uint8_t typeBit(const Value& v) {
@@ -342,6 +362,7 @@ VM::VM() {
   defineNative("indexOf", indexOfNative);
   defineNative("min", minNative);
   defineNative("max", maxNative);
+  defineNative("type", typeNative);
 }
 
 VM::~VM() {
