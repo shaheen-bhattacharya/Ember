@@ -77,7 +77,7 @@ void Heap::collectGarbage() {
   }
 
   nextGC = bytesAllocated * 2;
-  if (nextGC < 1024 * 1024) nextGC = 1024 * 1024;
+  if (nextGC < minHeap) nextGC = minHeap;
 
   if (logGC) {
     fprintf(stderr, "[gc] collected %zu bytes (%zu -> %zu), next at %zu\n",
