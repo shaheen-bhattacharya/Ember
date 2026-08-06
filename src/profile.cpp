@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -96,6 +97,17 @@ void printProfile() {
               return a->callCount > b->callCount;
             });
 
+  // EMBER_PROFILE_TOP=N keeps the report readable on big programs; functions
+  // are already sorted by call count, so the cap keeps the hottest.
+  size_t dropped = 0;
+  if (const char* topEnv = getenv("EMBER_PROFILE_TOP")) {
+    long top = strtol(topEnv, nullptr, 10);
+    if (top >= 1 && static_cast<size_t>(top) < functions.size()) {
+      dropped = functions.size() - static_cast<size_t>(top);
+      functions.resize(static_cast<size_t>(top));
+    }
+  }
+
   fprintf(stderr, "== profile ==\n");
   for (ObjFunction* fn : functions) {
     const char* tier = "";
@@ -132,5 +144,9 @@ void printProfile() {
                 site.offset, targetName(site.target), site.count);
       }
     }
+  }
+  if (dropped > 0) {
+    fprintf(stderr, "(%zu cooler functions omitted; raise EMBER_PROFILE_TOP)\n",
+            dropped);
   }
 }
